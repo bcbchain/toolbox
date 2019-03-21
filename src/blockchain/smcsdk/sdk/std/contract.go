@@ -90,6 +90,14 @@ type ContractMeta struct {
 	CodeOrgSig   []byte        `json:"codeOrgSig"`
 }
 
+// ContractWithEffectHeight contract address and is upgrade or not for effect height
+type ContractWithEffectHeight struct {
+	ContractAddr types.Address `json:"contractAddr"`
+	IsUpgrade    bool          `json:"isUpgrade"`
+}
+
+func KeyOfContractWithEffectHeight(height string) string { return "/" + height }
+
 // KeyOfContract the access key for contract in state database
 // data for this key refer Contract
 func KeyOfContract(contractAddr types.Address) string { return "/contract/" + contractAddr }

@@ -65,8 +65,10 @@ type Result struct {
 	Stores      []Field
 	StoreCaches []Field
 
-	InitChain Function
-	Functions []Function
+	InitChain          Function
+	UpdateChain        Function
+	IsExistUpdateChain bool
+	Functions          []Function
 
 	Receipts []Method
 
@@ -220,6 +222,9 @@ func (v *visitor) parseAllFunc(d *ast.FuncDecl) {
 		// fmt.Println("FUNCTION::: name(", d.Name.Name, ") =>[[", d.Doc.Text(), "]]")
 		if v.hasConstructorInComments(d) && d.Name.Name == "InitChain" {
 			v.res.InitChain = v.parseInitChain(d)
+		} else if v.hasConstructorInComments(d) && d.Name.Name == "UpdateChain" {
+			v.res.UpdateChain = v.parseUpdateChain(d)
+			v.res.IsExistUpdateChain = true
 		}
 		mGas := v.getGasFromComments(d, methodGasPrefix)
 		iGas := v.getGasFromComments(d, interfaceGasPrefix)
@@ -263,6 +268,21 @@ func (v *visitor) parseInitChain(d *ast.FuncDecl) Function {
 	}
 	if len(d.Recv.List) != 1 {
 		v.reportErr("InitChain has wrong receiver", d.Recv.Pos())
+	}
+	f.Receiver = v.parseField(d.Recv.List[0])
+	f.pos = d.Pos()
+
+	return f
+}
+
+func (v *visitor) parseUpdateChain(d *ast.FuncDecl) Function {
+	f := Function{}
+
+	if len(d.Type.Params.List) > 0 {
+		v.reportErr("UpdateChain must have no params", d.Type.Params.Pos())
+	}
+	if len(d.Recv.List) != 1 {
+		v.reportErr("UpdateChain has wrong receiver", d.Recv.Pos())
 	}
 	f.Receiver = v.parseField(d.Recv.List[0])
 	f.pos = d.Pos()

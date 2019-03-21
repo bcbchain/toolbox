@@ -63,6 +63,32 @@ func FuncRecover(response *bcType.Response) {
 	}
 }
 
+// InitChain initial smart contract
+func (pbs *{{$stubName}}) InitChain(smc sdk.ISmartContract) (response bcType.Response) {
+	defer FuncRecover(&response)
+
+	contractObj := new({{$.PackageName}}.{{$.ContractStruct}})
+	contractObj.SetSdk(smc)
+	contractObj.InitChain()
+
+	response.Code = types.CodeOK
+	return response
+}
+
+// UpdateChain update smart contract
+func (pbs *{{$stubName}}) UpdateChain(smc sdk.ISmartContract) (response bcType.Response) {
+	defer FuncRecover(&response)
+	
+	{{- if $.IsExistUpdateChain}}
+	contractObj := new({{$.PackageName}}.{{$.ContractStruct}})
+	contractObj.SetSdk(smc)
+	contractObj.UpdateChain()
+	{{- end}}	
+
+	response.Code = types.CodeOK
+	return response
+}
+
 //Invoke invoke function
 func (pbs *{{$stubName}}) Invoke(smc sdk.ISmartContract) (response bcType.Response) {
 	defer FuncRecover(&response)
@@ -76,7 +102,6 @@ func (pbs *{{$stubName}}) Invoke(smc sdk.ISmartContract) (response bcType.Respon
 		response = common.CreateResponse(smc.Message(), response.Tags, "", fee, gasUsed, smc.Tx().GasLimit(), err)
 		return
 	}
-
 
 	var data string
 	err = types.Error{ErrorCode:types.CodeOK}
@@ -141,7 +166,8 @@ type StubExport struct {
 	Functions      []FatFunction
 	Port           int
 
-	PlainUserStruct []string
+	IsExistUpdateChain bool
+	PlainUserStruct    []string
 }
 
 // Res2rpc - transform the parsed result to RPC Export struct
@@ -155,6 +181,7 @@ func Res2stub(res *parsecode.Result) StubExport {
 	exp.OrgID = res.OrgID
 	exp.Version = res.Version
 	exp.Versions = res.Versions
+	exp.IsExistUpdateChain = res.IsExistUpdateChain
 	imports := make(map[parsecode.Import]struct{})
 
 	fatFunctions := make([]FatFunction, 0)

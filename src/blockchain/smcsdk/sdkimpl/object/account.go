@@ -167,7 +167,7 @@ func (a *Account) transferByToken(tokenAddr types.Address, to types.Address, val
 		a.SetBalanceOfToken(tokenAddr, a.BalanceOfToken(tokenAddr).Sub(value))
 		toAcct.SetBalanceOfToken(tokenAddr, toAcct.BalanceOfToken(tokenAddr).Add(value))
 
-		toAcct.addAccountTokenKey(std.KeyOfAccountToken(toAcct.address, tokenAddr))
+		toAcct.AddAccountTokenKey(std.KeyOfAccountToken(toAcct.address, tokenAddr))
 
 		// fire event
 		a.smc.Helper().ReceiptHelper().Emit(
@@ -187,12 +187,21 @@ func (a *Account) accountOfContracts() []types.Address {
 	return a.smc.(*sdkimpl.SmartContract).LlState().GetStrings(key)
 }
 
-func (a *Account) addAccountTokenKey(keyOfAccountToken string) {
+func (a *Account) AddAccountTokenKey(keyOfAccountToken string) {
 	key := std.KeyOfAccount(a.address)
 
 	itemList := a.smc.(*sdkimpl.SmartContract).LlState().GetStrings(key)
 
-	itemList = append(itemList, keyOfAccountToken)
+	isExist := false
+	for _, item := range itemList {
+		if item == keyOfAccountToken {
+			isExist = true
+			break
+		}
+	}
+	if isExist == false {
+		itemList = append(itemList, keyOfAccountToken)
+	}
 
 	a.smc.(*sdkimpl.SmartContract).LlState().Set(key, itemList)
 }

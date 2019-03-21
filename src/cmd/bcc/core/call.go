@@ -7,67 +7,70 @@ import (
 	"blockchain/tx2"
 	"blockchain/types"
 	"cmd/bcc/cache"
-	common2 "cmd/bcc/common"
 	"cmd/bcc/pvar"
-	"common/wal"
-	"encoding/hex"
 	"errors"
 	"io/ioutil"
-	"strconv"
 	"strings"
 
-	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/tmlibs/common"
 )
 
 // Call call contract's method with params, save params to paramsFile if it's length too long
 func Call(name, password string, bccParams CallParam) (result *CommitTxResult, err error) {
 
-	result, err = call(name, password, bccParams.OrgName, bccParams.Contract, bccParams.Method, bccParams.ParamsFile,
-		bccParams.Params, bccParams.SplitBy, bccParams.Pay, bccParams.GasLimit, bccParams.Note, bccParams.KeyStorePath,
-		bccParams.ChainID, false, false)
+	defer FuncRecover(&err)
+
+	// reset value or not
+	splitBy, keyStorePath, chainID := prepare(bccParams.SplitBy, bccParams.KeyStorePath, bccParams.ChainID)
+
+	// require not empty
+	requireNotEmpty("name", name)
+	requireNotEmpty("password", password)
+	requireNotEmpty("orgName", bccParams.OrgName)
+	requireNotEmpty("contractName", bccParams.Contract)
+	requireNotEmpty("methodName", bccParams.Method)
+
+	// check pay
+	value, token, err := checkPay(bccParams.Pay)
 	if err != nil {
 		return
 	}
 
-	nonceErrDesc := "Invalid nonce"
-	smcErrDesc := "The contract has expired"
-	if result.Code != types.CodeOK {
+	result, err = call(name, password, bccParams.OrgName, bccParams.Contract, bccParams.Method, bccParams.ParamsFile,
+		bccParams.Params, splitBy, token, value, bccParams.GasLimit, bccParams.Note, keyStorePath,
+		chainID, false, false)
+	if err != nil {
+		return
+	}
+
+	var count = 0
+	for result.Code != types.CodeOK && count < 2 {
 		if result.Log == nonceErrDesc {
 			result, err = call(name, password, bccParams.OrgName, bccParams.Contract, bccParams.Method, bccParams.ParamsFile,
-				bccParams.Params, bccParams.SplitBy, bccParams.Pay, bccParams.GasLimit, bccParams.Note, bccParams.KeyStorePath,
-				bccParams.ChainID, true, false)
+				bccParams.Params, splitBy, token, value, bccParams.GasLimit, bccParams.Note, keyStorePath,
+				chainID, true, false)
 		} else if result.Log == smcErrDesc {
 			result, err = call(name, password, bccParams.OrgName, bccParams.Contract, bccParams.Method, bccParams.ParamsFile,
-				bccParams.Params, bccParams.SplitBy, bccParams.Pay, bccParams.GasLimit, bccParams.Note, bccParams.KeyStorePath,
-				bccParams.ChainID, false, false)
+				bccParams.Params, splitBy, token, value, bccParams.GasLimit, bccParams.Note, keyStorePath,
+				chainID, false, false)
 		}
+
+		count++
 	}
 
 	return
 }
 
-func call(name, password, orgName, contractName, methodName, file, params,
-	splitBy, pay, gasLimit, note, keyStorePath, chainID string, bNonceErr, bSmcErr bool) (result *CommitTxResult, err error) {
+func call(name, password, orgName, contractName, methodName, file, params, splitBy, token string, value bn.Number,
+	gasLimit, note, keyStorePath, chainID string, bNonceErr, bSmcErr bool) (result *CommitTxResult, err error) {
 
-	if splitBy == "" {
-		splitBy = "@"
-	}
-
-	if keyStorePath == "" {
-		keyStorePath = ".keystore"
-	}
-
-	if chainID == "" {
-		chainID = common2.GetBCCConfig().DefaultChainID
-	}
-	tx2.Init(chainID)
-
+	// get account transaction nonce
 	nonce, err := getNonce(keyStorePath, chainID, name, password, bNonceErr)
 	if err != nil {
 		return nil, errors.New("getNonce error: " + err.Error())
 	}
 
+	// get contract information with orgName and contractName
 	contract, err := getContract(orgName, contractName, chainID, bSmcErr, keyStorePath)
 	if err != nil {
 		return nil, errors.New("getContract error: " + err.Error())
@@ -80,30 +83,28 @@ func call(name, password, orgName, contractName, methodName, file, params,
 			break
 		}
 	}
-
 	if len(item.MethodID) == 0 {
 		return nil, errors.New("invalid method")
 	}
 
+	// encode method parameters
 	rlpBytes, err := encode(item, splitBy, file, params)
 	if err != nil {
 		return
 	}
 
-	uGasLimit, err := strconv.ParseUint(gasLimit, 10, 64)
+	uGasLimit, err := requireUint64("gasLimit", gasLimit, 10)
 	if err != nil {
 		return
 	}
-
-	methodID, err := strconv.ParseUint(item.MethodID, 16, 64)
-	if err != nil {
-		return
-	}
+	methodID, _ := requireUint64("methodID", item.MethodID, 16)
 
 	var msgList []types.Message
 
-	if len(pay) != 0 {
-		transferMsg, err := createTransferMsg(contract, pay, chainID)
+	// pack tx
+	// if pay option not empty, then create transfer message
+	if value.IsGreaterThanI(0) {
+		transferMsg, err := createTransferMsg(contract, value, token, chainID)
 		if err != nil {
 			return nil, err
 		}
@@ -121,6 +122,7 @@ func call(name, password, orgName, contractName, methodName, file, params,
 	}
 	txStr := tx2.WrapTx(pl, priKeyHex)
 
+	// commit transaction
 	result, err = CommitTx(chainID, txStr)
 	if err != nil {
 		return
@@ -171,6 +173,21 @@ func getContract(orgName, contractName, chainID string, bSmcErr bool, keyStorePa
 	return
 }
 
+// 生成转账message
+func createTransferMsg(contract *std.Contract, value bn.Number, token, chainID string) (transferMsg types.Message, err error) {
+
+	rlpBytes := tx2.WrapInvokeParams(contract.Account, value)
+
+	tokenContract, err := contractOfTokenName(chainID, token)
+	if err != nil {
+		return
+	}
+
+	transferMsg = types.Message{Contract: tokenContract.Address, MethodID: 0x44d8ca60, Items: rlpBytes}
+
+	return
+}
+
 func encode(method std.Method, splitBy, file, params string) (rlpBytes []common.HexBytes, err error) {
 	if len(file) != 0 {
 		// 如果文件存在且能够正确读取信息，则优先使用文件中的内容
@@ -201,46 +218,4 @@ func readParamFile(file string) (params string, err error) {
 	params = string(b)
 
 	return
-}
-
-func createTransferMsg(contract *std.Contract, pay, chainID string) (transferMsg types.Message, err error) {
-
-	leftBracketIndex := strings.Index(pay, "(")
-	value := pay[:leftBracketIndex]
-	valueLen := len(value)
-	if valueLen != 0 {
-		dotIndex := strings.Index(value, ".")
-		value = strings.Replace(value, ".", "", -1)
-		var zeroCount = 9
-		if dotIndex > 0 {
-			zeroCount = 9 - (valueLen - dotIndex - 1)
-		}
-		for zeroCount > 0 {
-			value += "0"
-			zeroCount--
-		}
-	}
-	rlpBytes := tx2.WrapInvokeParams(contract.Account, bn.NewNumberStringBase(value, 10))
-
-	tokenName := pay[leftBracketIndex+1 : len(pay)-1]
-	tokenContract, err := contractOfTokenName(chainID, tokenName)
-	if err != nil {
-		return
-	}
-
-	transferMsg = types.Message{Contract: tokenContract.Address, MethodID: 0x44d8ca60, Items: rlpBytes}
-
-	return
-}
-
-func getAccountPriKey(keyStorePath, name, password string) (priKeyHex string, err error) {
-
-	acct, err := wal.LoadAccount(keyStorePath, name, password)
-	if err != nil {
-		return
-	}
-
-	priKey := acct.PrivateKey.(crypto.PrivKeyEd25519)
-
-	return "0x" + hex.EncodeToString(priKey[:]), nil
 }

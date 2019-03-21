@@ -49,7 +49,25 @@ type RegisterTokenParam struct {
 }
 
 type RegisterOrgParam struct {
-	OrgName      types.Address `json:"OrgName"`
+	OrgName      string `json:"orgName"`
+	ChainID      string `json:"chainID"`
+	KeyStorePath string `json:"keyStorePath"`
+	GasLimit     string `json:"gasLimit"`
+	Note         string `json:"note"`
+}
+
+type SetSignersParam struct {
+	OrgName      string `json:"orgName"`
+	PubKeys      string `json:"pubKeys"`
+	ChainID      string `json:"chainID"`
+	KeyStorePath string `json:"keyStorePath"`
+	GasLimit     string `json:"gasLimit"`
+	Note         string `json:"note"`
+}
+
+type AuthorizeParam struct {
+	OrgName      string        `json:"orgName"`
+	Deployer     types.Address `json:"deployer"`
 	ChainID      string        `json:"chainID"`
 	KeyStorePath string        `json:"keyStorePath"`
 	GasLimit     string        `json:"gasLimit"`

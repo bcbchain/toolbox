@@ -49,9 +49,11 @@ func main() {
 
 var routes = map[string]*rpcserver.RPCFunc{
 	// bcc api
+	"bcc_registerOrg":    rpcserver.NewRPCFunc(core.RegisterOrg, "name,password,bccParams"),
+	"bcc_setSigners":     rpcserver.NewRPCFunc(core.SetSigners, "name,password,bccParams"),
+	"bcc_authorize":      rpcserver.NewRPCFunc(core.Authorize, "name,password,bccParams"),
 	"bcc_deployContract": rpcserver.NewRPCFunc(core.DeployContract, "name,password,bccParams"),
 	"bcc_registerToken":  rpcserver.NewRPCFunc(core.RegisterToken, "name,password,bccParams"),
-	"bcc_registerOrg":    rpcserver.NewRPCFunc(core.RegisterOrg, "name,password,bccParams"),
 	"bcc_transfer":       rpcserver.NewRPCFunc(core.Transfer, "name,password,bccParams"),
 	"bcc_call":           rpcserver.NewRPCFunc(core.Call, "name,password,bccParams"),
 

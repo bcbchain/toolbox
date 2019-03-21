@@ -19,12 +19,10 @@ import (
 	"github.com/tendermint/tendermint/rpc/core/types"
 )
 
-var (
-	genesisTokenAddr = ""
-)
-
 //BlockHeight blockHeight query
 func BlockHeight(chainID string) (blkHeight *BlockHeightResult, err error) {
+
+	defer FuncRecover(&err)
 
 	addrS := nodeAddrSlice(chainID)
 
@@ -43,11 +41,9 @@ func BlockHeight(chainID string) (blkHeight *BlockHeightResult, err error) {
 //Block block information query
 func Block(height int64, chainID string) (blk *BlockResult, err error) {
 
-	if chainID == "" {
-		chainID = common.GetBCCConfig().DefaultChainID
-	}
-	crypto.SetChainId(chainID)
-	tx2.Init(chainID)
+	defer FuncRecover(&err)
+
+	_, _, chainID = prepare("", "", chainID)
 
 	addrS := nodeAddrSlice(chainID)
 
@@ -88,6 +84,10 @@ func Block(height int64, chainID string) (blk *BlockResult, err error) {
 
 //Transaction transaction information query
 func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (tx *TxResult, err error) {
+
+	defer FuncRecover(&err)
+
+	requireNotEmpty("txHash", txHash)
 
 	if chainID == "" {
 		chainID = common.GetBCCConfig().DefaultChainID
@@ -148,13 +148,9 @@ func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (t
 // Balance balance information query
 func Balance(address types.Address, name, password, tokenName string, all bool, chainID, keyStorePath string) (result *[]BalanceItemResult, err error) {
 
-	if chainID == "" {
-		chainID = common.GetBCCConfig().DefaultChainID
-	}
+	defer FuncRecover(&err)
 
-	if keyStorePath == "" {
-		keyStorePath = ".keystore"
-	}
+	_, keyStorePath, chainID = prepare("", keyStorePath, chainID)
 
 	// if account address is empty, then load account with name and password
 	if address == "" {
@@ -271,15 +267,11 @@ func allBalance(chainID string, address types.Address) (items *[]BalanceItemResu
 // Nonce nonce information query
 func Nonce(address types.Address, name, password, chainID, keyStorePath string) (result *NonceResult, err error) {
 
+	defer FuncRecover(&err)
+
 	addrS := nodeAddrSlice(chainID)
 
-	if chainID == "" {
-		chainID = common.GetBCCConfig().DefaultChainID
-	}
-
-	if keyStorePath == "" {
-		keyStorePath = ".keystore"
-	}
+	_, keyStorePath, chainID = prepare("", keyStorePath, chainID)
 
 	if address == "" {
 		acct, err := wal.LoadAccount(keyStorePath, name, password)
@@ -318,6 +310,10 @@ func Nonce(address types.Address, name, password, chainID, keyStorePath string) 
 // CommitTx commit transaction information
 func CommitTx(chainID, tx string) (commit *CommitTxResult, err error) {
 
+	defer FuncRecover(&err)
+
+	requireNotEmpty("tx", tx)
+
 	addrS := nodeAddrSlice(chainID)
 
 	var result *core_types.ResultBroadcastTxCommit
@@ -330,13 +326,12 @@ func CommitTx(chainID, tx string) (commit *CommitTxResult, err error) {
 	if result.CheckTx.Code != types.CodeOK {
 		commit.Code = result.CheckTx.Code
 		commit.Log = result.CheckTx.Log
-		commit.Fee = result.CheckTx.Fee
 	} else {
 		commit.Code = result.DeliverTx.Code
 		commit.Log = result.DeliverTx.Log
-		commit.Fee = result.DeliverTx.Fee
 	}
 
+	commit.Fee = result.DeliverTx.Fee
 	commit.TxHash = hex.EncodeToString(result.Hash)
 	commit.Height = result.Height
 	commit.Data = result.DeliverTx.Data
@@ -347,13 +342,17 @@ func CommitTx(chainID, tx string) (commit *CommitTxResult, err error) {
 //Version version information for the current block
 func Version() (result *VersionResult, err error) {
 
+	defer FuncRecover(&err)
+
+	result = new(VersionResult)
 	var version []byte
-	version, err = ioutil.ReadFile("./.config/version")
+	version, err = ioutil.ReadFile("./version")
 	if err != nil {
 		common.GetLogger().Error("Read version file error", "error", err)
+		err = nil
+		result.Version = "0.0.0.0"
 		return
 	}
-	result = new(VersionResult)
 	result.Version = string(version)
 
 	return
@@ -439,22 +438,6 @@ func tokenName(chainID string, tokenAddress types.Address) (name string, err err
 	}
 
 	return token.Name, err
-}
-
-func genesisToken(chainID string) string {
-
-	addrS := nodeAddrSlice(chainID)
-
-	if genesisTokenAddr == "" {
-		token := new(std.Token)
-
-		if err := DoHttpQueryAndParse(addrS, std.KeyOfGenesisToken(), token); err != nil {
-			return ""
-		} else {
-			genesisTokenAddr = token.Address
-		}
-	}
-	return genesisTokenAddr
 }
 
 func contractOfName(chainID, orgID, contractName string) (contract *std.Contract, err error) {

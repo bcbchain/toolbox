@@ -73,9 +73,6 @@ func block(chainID, height string) error {
 }
 
 func transaction(chainID, txHash string) error {
-	if err := core.RequireNoEmpty("txHash", txHash); err != nil {
-		return err
-	}
 
 	tx, err := core.Transaction(chainID, txHash, nil)
 	if err != nil {
@@ -126,9 +123,6 @@ func nonce(accAddress types.Address, name, password, chainID, keyStorePath strin
 }
 
 func commitTx(chainID, tx string) error {
-	if err := core.RequireNoEmpty("transaction information", tx); err != nil {
-		return err
-	}
 
 	result, err := core.CommitTx(chainID, tx)
 	if err != nil {
@@ -160,11 +154,6 @@ func versionF() error {
 func deployContract(name, password, contractName, version, orgName, codeFile,
 	effectHeight, owner, keyStorePath, gasLimit, note, chainID string) error {
 
-	if contractName == "" || version == "" || orgName == "" || codeFile == "" ||
-		effectHeight == "" || owner == "" || gasLimit == "" {
-		Error("Invalid value.")
-	}
-
 	param := core.DeployContractParam{
 		ContractName: contractName,
 		Version:      version,
@@ -193,10 +182,6 @@ func deployContract(name, password, contractName, version, orgName, codeFile,
 func registerToken(name, password, tokenName, tokenSymbol, totalSupply, gasPrice, gasLimit, note, keyStorePath, chainID,
 	addSupplyEnabled, burnEnabled string) error {
 
-	if tokenName == "" || tokenSymbol == "" || totalSupply == "" || gasPrice == "" || addSupplyEnabled == "" || burnEnabled == "" {
-		Error("Invalid value.")
-	}
-
 	param := core.RegisterTokenParam{
 		TokenName:        tokenName,
 		TokenSymbol:      tokenSymbol,
@@ -224,10 +209,6 @@ func registerToken(name, password, tokenName, tokenSymbol, totalSupply, gasPrice
 
 func registerOrg(name, password, orgName, gasLimit, note, keyStorePath, chainID string) error {
 
-	if orgName == "" || gasLimit == "" {
-		Error("Invalid value.")
-	}
-
 	param := core.RegisterOrgParam{
 		OrgName:      orgName,
 		ChainID:      chainID,
@@ -248,11 +229,53 @@ func registerOrg(name, password, orgName, gasLimit, note, keyStorePath, chainID 
 	return err
 }
 
-func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, chainID string) error {
+func setSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePath, chainID string) error {
 
-	if token == "" || gasLimit == "" {
-		Error("Invalid value.")
+	param := core.SetSignersParam{
+		OrgName:      orgName,
+		PubKeys:      pubKeys,
+		ChainID:      chainID,
+		KeyStorePath: keyStorePath,
+		GasLimit:     gasLimit,
+		Note:         note,
 	}
+
+	result, err := core.SetSigners(name, password, param)
+	if err != nil {
+		Error(err.Error())
+	}
+
+	fmt.Println("OK")
+	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	fmt.Printf("Response: %s\n", string(jsIndent))
+
+	return err
+}
+
+func authorize(name, password, orgName, deployer, gasLimit, note, keyStorePath, chainID string) error {
+
+	param := core.AuthorizeParam{
+		OrgName:      orgName,
+		Deployer:     deployer,
+		ChainID:      chainID,
+		KeyStorePath: keyStorePath,
+		GasLimit:     gasLimit,
+		Note:         note,
+	}
+
+	result, err := core.Authorize(name, password, param)
+	if err != nil {
+		Error(err.Error())
+	}
+
+	fmt.Println("OK")
+	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	fmt.Printf("Response: %s\n", string(jsIndent))
+
+	return err
+}
+
+func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, chainID string) error {
 
 	param := core.TransferParam{
 		Token:        token,

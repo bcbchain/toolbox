@@ -1,10 +1,21 @@
 package core
 
 import (
+	"blockchain/smcsdk/sdk/bn"
+	"blockchain/tx2"
 	"cmd/bcc/common"
+	"common/wal"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/tendermint/go-crypto"
 	"strconv"
+	"strings"
+)
+
+const (
+	nonceErrDesc = "Invalid nonce"
+	smcErrDesc   = "The contract has expired"
 )
 
 func nodeAddrSlice(chainID string) []string {
@@ -26,25 +37,120 @@ func nodeAddrSlice(chainID string) []string {
 	}
 }
 
-func RequireNoEmpty(id, data string) (err error) {
+func getAccountPriKey(keyStorePath, name, password string) (priKeyHex string, err error) {
 
-	if len(data) == 0 {
-		err = errors.New(fmt.Sprintf("%s cannot be emtpy", id))
+	acct, err := wal.LoadAccount(keyStorePath, name, password)
+	if err != nil {
+		return
 	}
 
-	return
+	priKey := acct.PrivateKey.(crypto.PrivKeyEd25519)
+
+	return "0x" + hex.EncodeToString(priKey[:]), nil
 }
 
-func RequireUint64(valueStr string) (uint64, error) {
-	value, err := strconv.ParseUint(valueStr, 10, 64)
+func FuncRecover(errPtr *error) {
+	if err := recover(); err != nil {
+		msg := ""
+		if errInfo, ok := err.(error); ok {
+			msg = errInfo.Error()
+		}
+
+		if errInfo, ok := err.(string); ok {
+			msg = errInfo
+		}
+
+		*errPtr = errors.New(msg)
+	}
+}
+
+func prepare(splitBy, keyStorePath, chainID string) (string, string, string) {
+	if splitBy == "" {
+		splitBy = "@"
+	}
+
+	if keyStorePath == "" {
+		keyStorePath = ".keystore"
+	}
+
+	if chainID == "" {
+		chainID = common.GetBCCConfig().DefaultChainID
+	}
+	crypto.SetChainId(chainID)
+	tx2.Init(chainID)
+
+	return splitBy, keyStorePath, chainID
+}
+
+func requireNotEmpty(key, data string) {
+
+	if len(data) == 0 {
+		panic(errors.New(fmt.Sprintf("%s cannot be emtpy", key)))
+	}
+}
+
+func requireUint64(key, valueStr string, base int) (uint64, error) {
+	value, err := strconv.ParseUint(valueStr, base, 64)
 	if err != nil {
-		return 0, err
+		return 0, errors.New(fmt.Sprintf("%s error=%s", key, err.Error()))
 	}
 
 	return value, nil
 }
 
-func CheckPay(pay string) (err error) {
+func checkPay(pay string) (value bn.Number, token string, err error) {
+
+	token = ""
+	value = bn.N(0)
+	if len(pay) > 0 {
+
+		// step 1. check format
+		firstIndex := strings.Index(pay, "(")
+		lastIndex := strings.Index(pay, ")")
+		if firstIndex == -1 || lastIndex < firstIndex {
+			err = errors.New("pay option's format error, right format example: 1.02(bcb)")
+			return
+		}
+
+		// step 2. check token
+		token = pay[firstIndex+1 : lastIndex]
+		if len(token) <= 0 {
+			err = errors.New("pay option's format error, token cannot be empty")
+			return
+		}
+
+		// step 3. check value
+		valueStr := pay[:firstIndex]
+		potIndex := strings.Index(valueStr, ".")
+		if potIndex != -1 && len(strings.TrimRight(valueStr[potIndex+1:], "0")) > 9 {
+			err = errors.New("pay option's format error, value's decimals cannot great than 9 chars")
+			return
+		}
+
+		valueStr = strings.Replace(valueStr, ".", "", -1)
+		value = bn.NewNumberStringBase(valueStr, 10)
+		if value.IsLEI(0) {
+			err = errors.New("pay option's format error, value must be number and greater than zero")
+		}
+	}
+
+	return
+}
+
+func checkVersion(version string) (err error) {
+	if len(version) < 3 {
+		return errors.New("invalid version")
+	}
+
+	if len(strings.Trim(version, ".")) != len(version) {
+		return errors.New("invalid version")
+	}
+
+	verStr := strings.Replace(version, ".", "", -1)
+	verN := bn.NewNumberStringBase(verStr, 10)
+	if verN.IsLessThanI(0) {
+		return errors.New("invalid version")
+	}
 
 	return
 }

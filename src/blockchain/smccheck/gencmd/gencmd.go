@@ -19,6 +19,8 @@ import (
 	"blockchain/smcsdk/sdk/rlp"
 	"blockchain/smcsdk/sdk/std"
 	"blockchain/smcsdk/sdkimpl"
+	"blockchain/smcsdk/sdkimpl/helper"
+	"blockchain/smcsdk/sdkimpl/llstate"
 	"blockchain/smcsdk/sdkimpl/object"
 	"contract/{{.OrgID}}/stub"
 
@@ -188,6 +190,9 @@ var Routes = map[string]socket.CallBackFunc{
 	"McDirtyToken":    McDirtyToken,
 	"McDirtyContract": McDirtyContract,
 	"SetLogLevel":     SetLogLevel,
+	"Health":          Health,
+	"InitChain":       InitChain,
+	"UpdateChain":     UpdateChain,
 }
 
 //RunRPC starts RPC service
@@ -339,6 +344,100 @@ func SetLogLevel(req map[string]interface{}) (interface{}, error) {
 	level := req["level"].(string)
 	logger.AllowLevel(level)
 	return true, nil
+}
+
+// Health return health message
+func Health(req map[string]interface{}) (interface{}, error) {
+	return "health", nil
+}
+
+// InitChain initial smart contract
+func InitChain(req map[string]interface{}) (interface{}, error) {
+	logger.Info("genesis contract InitChain")
+
+	smc := newSMC(req)
+
+	contractStub := stub.NewStub(smc, logger)
+	logger.Debugf("Invoke contractStub InitChain")
+	response := contractStub.InitChain(smc)
+	smc.(*sdkimpl.SmartContract).Commit()
+	logger.Debugf("Invoke contractStub Commit")
+
+	resBytes, _ := jsoniter.Marshal(response)
+
+	return string(resBytes), nil
+}
+
+// UpdateChain initial smart contract
+func UpdateChain(req map[string]interface{}) (interface{}, error) {
+	logger.Info("genesis contract UpdateChain")
+
+	smc := newSMC(req)
+
+	contractStub := stub.NewStub(smc, logger)
+	logger.Debugf("Invoke contractStub UpdateChain")
+	response := contractStub.UpdateChain(smc)
+	smc.(*sdkimpl.SmartContract).Commit()
+	logger.Debugf("Invoke contractStub Commit")
+
+	resBytes, _ := jsoniter.Marshal(response)
+
+	return string(resBytes), nil
+}
+
+func newSMC(req map[string]interface{}) sdk.ISmartContract {
+	transID := int64(req["transID"].(float64))
+	txID := int64(req["txID"].(float64))
+	mCallParam := req["callParam"].(map[string]interface{})
+	var callParam types.RPCInvokeCallParam
+	jsonStr, _ := jsoniter.Marshal(mCallParam)
+	err := jsoniter.Unmarshal(jsonStr, &callParam)
+	if err != nil {
+		logger.Errorf(err.Error())
+		panic(err)
+	}
+	mBlockHeader := req["blockHeader"].(map[string]interface{})
+	var blockHeader abci.Header
+	jsonStr, _ = jsoniter.Marshal(mBlockHeader)
+	logger.Debugf(string(jsonStr))
+	err = jsoniter.Unmarshal(jsonStr, &blockHeader)
+	if err != nil {
+		logger.Errorf("Invoke error: " + err.Error())
+		panic(err)
+	}
+
+	logger.Debug("InitChain/UpdateChain", "transID", transID, "txID", txID)
+	logger.Trace("InitChain/UpdateChain", "callParam", callParam)
+
+	sdkReceipts := make([]sdkType.KVPair, 0)
+	for _, v := range callParam.Receipts {
+		sdkReceipts = append(sdkReceipts, sdkType.KVPair{Key: v.Key, Value: v.Value})
+	}
+
+	items := make([]sdkType.HexBytes, 0)
+	for _, item := range callParam.Message.Items {
+		items = append(items, []byte(item))
+	}
+
+	smc := sdkimpl.SmartContract{}
+	llState := llstate.NewLowLevelSDB(&smc, transID, txID)
+	smc.SetLlState(llState)
+
+	block := object.NewBlock(&smc, blockHeader.ChainID,  blockHeader.Version, sdkType.Hash{}, blockHeader.DataHash,
+		blockHeader.Height, blockHeader.Time, blockHeader.NumTxs, blockHeader.ProposerAddress, blockHeader.RewardAddress,
+		blockHeader.RandomeOfBlock, blockHeader.LastBlockID.Hash, blockHeader.LastCommitHash, blockHeader.LastAppHash,
+		int64(blockHeader.LastFee))
+	smc.SetBlock(block)
+
+	helperObj := helper.NewHelper(&smc)
+	smc.SetHelper(helperObj)
+
+	contract := object.NewContractFromAddress(&smc, callParam.Message.Contract)
+	msg := object.NewMessage(&smc, contract, "", items, callParam.Sender,
+		nil, nil)
+	smc.SetMessage(msg)
+
+	return &smc
 }
 
 //TransferFunc is used to transfer token for crossing contract invoking.

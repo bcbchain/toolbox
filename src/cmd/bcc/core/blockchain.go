@@ -1,109 +1,53 @@
 package core
 
 import (
+	"blockchain/algorithm"
 	"blockchain/smcsdk/sdk/bn"
 	"blockchain/smcsdk/sdk/crypto/sha3"
+	types2 "blockchain/smcsdk/sdk/types"
 	"blockchain/smcsdk/sdkimpl/helper"
 	"blockchain/tx2"
 	"blockchain/types"
-	"cmd/bcc/common"
+	"common/jsoniter"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"strconv"
 )
 
 const (
-	genesisOrgName  = "genesis"
-	smcContractName = "smartcontract"
-	tokenIssue      = "token-issue"
-	orgContractName = "organization"
+	genesisOrgName = "genesis"
 )
 
-func DeployContract(name, password string, param DeployContractParam) (result *CommitTxResult, err error) {
+func RegisterOrg(name, password string, bccParams RegisterOrgParam) (result *CommitTxResult, err error) {
 
-	var methodID uint32 = 3772413991
-	result, err = deployContract(name, password, param.ContractName, param.Version, param.OrgName, param.CodeFile,
-		param.EffectHeight, param.Owner, param.KeyStorePath, param.GasLimit, param.Note, param.ChainID, false, false, methodID)
+	defer FuncRecover(&err)
+
+	contractName := "organization"
+	_, keyStorePath, chainID := prepare("", bccParams.KeyStorePath, bccParams.ChainID)
+
+	// require not empty
+	requireNotEmpty("orgName", bccParams.OrgName)
+
+	values := make([]interface{}, 0)
+	values = append(values, bccParams.OrgName)
+
+	var methodID uint32 = 0x9e922f48
+	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, false, methodID, values)
 	if err != nil {
 		return
 	}
 
-	nonceErrDesc := "Invalid nonce"
-	smcErrDesc := "The contract has expired"
-	if result.Code != types.CodeOK {
+	var count = 0
+	for result.Code != types.CodeOK && count < 2 {
 		if result.Log == nonceErrDesc {
-			result, err = deployContract(name, password, param.ContractName, param.Version, param.OrgName, param.CodeFile,
-				param.EffectHeight, param.Owner, param.KeyStorePath, param.GasLimit, param.Note, param.ChainID, true, false, methodID)
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, true, false, methodID, values)
 		} else if result.Log == smcErrDesc {
-			result, err = deployContract(name, password, param.ContractName, param.Version, param.OrgName, param.CodeFile,
-				param.EffectHeight, param.Owner, param.KeyStorePath, param.GasLimit, param.Note, param.ChainID, false, true, methodID)
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, true, methodID, values)
 		}
-	}
 
-	if result.Code == types.CodeOK {
-		addrList := new([]string)
-		err = json.Unmarshal([]byte(result.Data), addrList)
-		if err != nil || len(*addrList) != 1 {
-			return
-		}
-		result.SmcAddress = (*addrList)[0]
-		result.Data = ""
-	}
-	return
-}
-
-func RegisterToken(name, password string, param RegisterTokenParam) (result *CommitTxResult, err error) {
-
-	var methodID uint32 = 3978108314
-	result, err = registerToken(name, password, param.TokenName, param.TokenSymbol, param.TotalSupply, param.GasPrice,
-		param.GasLimit, param.Note, param.KeyStorePath, param.ChainID,
-		param.AddSupplyEnabled, param.BurnEnabled, false, false, methodID)
-	if err != nil {
-		return
-	}
-
-	nonceErrDesc := "Invalid nonce"
-	smcErrDesc := "The contract has expired"
-	if result.Code != types.CodeOK {
-		if result.Log == nonceErrDesc {
-			result, err = registerToken(name, password, param.TokenName, param.TokenSymbol, param.TotalSupply, param.GasPrice,
-				param.GasLimit, param.Note, param.KeyStorePath, param.ChainID,
-				param.AddSupplyEnabled, param.BurnEnabled, true, false, methodID)
-		} else if result.Log == smcErrDesc {
-			result, err = registerToken(name, password, param.TokenName, param.TokenSymbol, param.TotalSupply, param.GasPrice,
-				param.GasLimit, param.Note, param.KeyStorePath, param.ChainID,
-				param.AddSupplyEnabled, param.BurnEnabled, false, true, methodID)
-		}
-	}
-
-	if result.Code == types.CodeOK {
-		addrList := new([]string)
-		err = json.Unmarshal([]byte(result.Data), addrList)
-		if err != nil || len(*addrList) != 1 {
-			return
-		}
-		result.TokenAddress = (*addrList)[0]
-		result.Data = ""
-	}
-	return
-}
-
-func RegisterOrg(name, password string, param RegisterOrgParam) (result *CommitTxResult, err error) {
-
-	var methodID uint32 = 2660380488
-	result, err = registerOrg(name, password, param.OrgName, param.GasLimit, param.Note, param.KeyStorePath, param.ChainID, false, false, methodID)
-	if err != nil {
-		return
-	}
-
-	nonceErrDesc := "Invalid nonce"
-	smcErrDesc := "The contract has expired"
-	if result.Code != types.CodeOK {
-		if result.Log == nonceErrDesc {
-			result, err = registerOrg(name, password, param.OrgName, param.GasLimit, param.Note, param.KeyStorePath, param.ChainID, true, false, methodID)
-		} else if result.Log == smcErrDesc {
-			result, err = registerOrg(name, password, param.OrgName, param.GasLimit, param.Note, param.KeyStorePath, param.ChainID, false, true, methodID)
-		}
+		count++
 	}
 
 	if result.Code == types.CodeOK {
@@ -115,21 +59,258 @@ func RegisterOrg(name, password string, param RegisterOrgParam) (result *CommitT
 		result.OrgID = (*orgIDs)[0]
 		result.Data = ""
 	}
+
 	return
 }
 
-func Transfer(name, password string, param TransferParam) (result *CommitTxResult, err error) {
+func SetSigners(name, password string, bccParams SetSignersParam) (result *CommitTxResult, err error) {
 
-	var method uint32 = 1155058272
-	result, err = transfer(name, password, param.Token, param.GasLimit, param.Note, param.To, param.Value, param.KeyStorePath, param.ChainID, false, method)
+	defer FuncRecover(&err)
+
+	contractName := "organization"
+	_, keyStorePath, chainID := prepare("", bccParams.KeyStorePath, bccParams.ChainID)
+
+	// require not empty
+	requireNotEmpty("orgName", bccParams.OrgName)
+	requireNotEmpty("pubKeys", bccParams.PubKeys)
+
+	pubKeys := make([]types2.HexBytes, 0)
+	var pubKeyStrs []string
+	err = jsoniter.Unmarshal([]byte(bccParams.PubKeys), &pubKeyStrs)
 	if err != nil {
 		return
 	}
 
-	nonceErrDesc := "Invalid nonce"
+	for _, item := range pubKeyStrs {
+		temp, err := hex.DecodeString(item[2:])
+		if err != nil {
+			return nil, err
+		}
+		pubKeys = append(pubKeys, temp)
+	}
+
+	bh := helper.BlockChainHelper{}
+	orgID := bh.CalcOrgID(bccParams.OrgName)
+
+	values := make([]interface{}, 0)
+	values = append(values, orgID)
+	values = append(values, pubKeys)
+
+	var methodID uint32 = 0x62191292
+	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, false, methodID, values)
+	if err != nil {
+		return
+	}
+
+	var count = 0
+	for result.Code != types.CodeOK && count < 2 {
+		if result.Log == nonceErrDesc {
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, true, false, methodID, values)
+		} else if result.Log == smcErrDesc {
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, true, methodID, values)
+		}
+
+		count++
+	}
+
+	return
+}
+
+func Authorize(name, password string, bccParams AuthorizeParam) (result *CommitTxResult, err error) {
+
+	defer FuncRecover(&err)
+
+	contractName := "smartcontract"
+	_, keyStorePath, chainID := prepare("", bccParams.KeyStorePath, bccParams.ChainID)
+
+	// require not empty
+	requireNotEmpty("orgName", bccParams.OrgName)
+
+	err = algorithm.CheckAddress(chainID, bccParams.Deployer)
+	if err != nil {
+		return
+	}
+
+	bh := helper.BlockChainHelper{}
+	orgID := bh.CalcOrgID(bccParams.OrgName)
+
+	values := make([]interface{}, 0)
+	values = append(values, bccParams.Deployer)
+	values = append(values, orgID)
+
+	var methodID uint32 = 0xd7596e75
+	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, false, methodID, values)
+	if err != nil {
+		return
+	}
+
+	var count = 0
+	for result.Code != types.CodeOK && count < 2 {
+		if result.Log == nonceErrDesc {
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, false, methodID, values)
+		} else if result.Log == smcErrDesc {
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, false, methodID, values)
+		}
+
+		count++
+	}
+
+	return
+}
+
+func DeployContract(name, password string, bccParams DeployContractParam) (result *CommitTxResult, err error) {
+
+	defer FuncRecover(&err)
+
+	contractName := "smartcontract"
+	_, keyStorePath, chainID := prepare("", bccParams.KeyStorePath, bccParams.ChainID)
+
+	// require not empty
+	requireNotEmpty("name", name)
+	requireNotEmpty("password", password)
+	requireNotEmpty("contractName", bccParams.ContractName)
+	requireNotEmpty("orgName", bccParams.OrgName)
+
+	// check arguments
+	err = algorithm.CheckAddress(chainID, bccParams.Owner)
+	if err != nil {
+		return
+	}
+
+	err = checkVersion(bccParams.Version)
+	if err != nil {
+		return
+	}
+
+	effectHeight, orgID, codeHash, codeData, devSig, orgSig, err := getDeployContractData(bccParams)
+	if err != nil {
+		return
+	}
+
+	values := make([]interface{}, 0)
+	values = append(values, bccParams.ContractName)
+	values = append(values, bccParams.Version)
+	values = append(values, orgID)
+	values = append(values, codeHash)
+	values = append(values, codeData)
+	values = append(values, devSig)
+	values = append(values, orgSig)
+	values = append(values, effectHeight)
+	values = append(values, bccParams.Owner)
+
+	var methodID uint32 = 0xe0da7827
+	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID,
+		false, false, methodID, values)
+	if err != nil {
+		return
+	}
+
+	var count = 0
+	for result.Code != types.CodeOK && count < 2 {
+		if result.Log == nonceErrDesc {
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID,
+				true, false, methodID, values)
+		} else if result.Log == smcErrDesc {
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID,
+				false, true, methodID, values)
+		}
+
+		count++
+	}
+
+	if result.Code == types.CodeOK {
+		addrList := new([]string)
+		err = json.Unmarshal([]byte(result.Data), addrList)
+		if err != nil || len(*addrList) != 1 {
+			return
+		}
+		result.SmcAddress = (*addrList)[0]
+		result.Data = ""
+	}
+
+	return
+}
+
+func RegisterToken(name, password string, bccParams RegisterTokenParam) (result *CommitTxResult, err error) {
+
+	defer FuncRecover(&err)
+
+	contractName := "token-issue"
+	_, keyStorePath, chainID := prepare("", bccParams.KeyStorePath, bccParams.ChainID)
+
+	// require not empty
+	requireNotEmpty("tokenName", bccParams.TokenName)
+	requireNotEmpty("tokenSymbol", bccParams.TokenSymbol)
+	requireNotEmpty("totalSupply", bccParams.TotalSupply)
+
+	totalSupply, addSupplyEnabled, burnEnabled, gasPrice, err := getRegisterTokenData(bccParams)
+	if err != nil {
+		return
+	}
+
+	values := make([]interface{}, 0)
+	values = append(values, bccParams.TokenName)
+	values = append(values, bccParams.TokenSymbol)
+	values = append(values, totalSupply)
+	values = append(values, addSupplyEnabled)
+	values = append(values, burnEnabled)
+	values = append(values, gasPrice)
+
+	var methodID uint32 = 0xed1d1d9a
+	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID,
+		false, false, methodID, values)
+	if err != nil {
+		return
+	}
+
+	var count = 0
+	for result.Code != types.CodeOK && count < 2 {
+		if result.Log == nonceErrDesc {
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID,
+				true, false, methodID, values)
+		} else if result.Log == smcErrDesc {
+			result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID,
+				false, true, methodID, values)
+		}
+
+		count++
+	}
+
+	if result.Code == types.CodeOK {
+		addrList := new([]string)
+		err = json.Unmarshal([]byte(result.Data), addrList)
+		if err != nil || len(*addrList) != 1 {
+			return
+		}
+		result.TokenAddress = (*addrList)[0]
+		result.Data = ""
+	}
+
+	return
+}
+
+func Transfer(name, password string, bccParams TransferParam) (result *CommitTxResult, err error) {
+
+	_, keyStorePath, chainID := prepare("", bccParams.KeyStorePath, bccParams.ChainID)
+
+	// require not empty
+	requireNotEmpty("token", bccParams.Token)
+	requireNotEmpty("value", bccParams.Value)
+
+	err = algorithm.CheckAddress(chainID, bccParams.To)
+	if err != nil {
+		return
+	}
+
+	var method uint32 = 1155058272
+	result, err = transfer(name, password, bccParams.Token, bccParams.GasLimit, bccParams.Note, bccParams.To, bccParams.Value, keyStorePath, chainID, false, method)
+	if err != nil {
+		return
+	}
+
 	if result.Code != types.CodeOK {
 		if result.Log == nonceErrDesc {
-			result, err = transfer(name, password, param.Token, param.GasLimit, param.Note, param.To, param.Value, param.KeyStorePath, param.ChainID, true, method)
+			result, err = transfer(name, password, bccParams.Token, bccParams.GasLimit, bccParams.Note, bccParams.To, bccParams.Value, keyStorePath, chainID, true, method)
 		}
 	}
 
@@ -137,15 +318,6 @@ func Transfer(name, password string, param TransferParam) (result *CommitTxResul
 }
 
 func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, chainID string, bNonceErr bool, method uint32) (result *CommitTxResult, err error) {
-
-	if keyStorePath == "" {
-		keyStorePath = ".keystore"
-	}
-
-	if chainID == "" {
-		chainID = common.GetBCCConfig().DefaultChainID
-	}
-	tx2.Init(chainID)
 
 	nonce, err := getNonce(keyStorePath, chainID, name, password, bNonceErr)
 	if err != nil {
@@ -167,8 +339,8 @@ func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, ch
 		return
 	}
 	v := bn.NewNumberStringBase(value, 10)
-	params := makeParams(to, v)
-	txStr := GenerateTx(contract.Address, method, params, nonce, int64(uGasLimit), note, privStr)
+	bccParamss := makeParams(to, v)
+	txStr := GenerateTx(contract.Address, method, bccParamss, nonce, int64(uGasLimit), note, privStr)
 
 	result, err = CommitTx(chainID, txStr)
 	if err != nil {
@@ -177,24 +349,15 @@ func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, ch
 	return
 }
 
-func registerOrg(name, password, orgName, gasLimit, note, keyStorePath, chainID string,
-	bNonceErr, bSmcErr bool, methodID uint32) (result *CommitTxResult, err error) {
-
-	if keyStorePath == "" {
-		keyStorePath = ".keystore"
-	}
-
-	if chainID == "" {
-		chainID = common.GetBCCConfig().DefaultChainID
-	}
-	tx2.Init(chainID)
+func packAndCommitTx(name, password, contractName, gasLimit, note, keyStorePath, chainID string,
+	bNonceErr, bSmcErr bool, methodID uint32, values []interface{}) (result *CommitTxResult, err error) {
 
 	nonce, err := getNonce(keyStorePath, chainID, name, password, bNonceErr)
 	if err != nil {
 		return
 	}
 
-	contract, err := getContract(genesisOrgName, orgContractName, chainID, bSmcErr, keyStorePath)
+	contract, err := getContract(genesisOrgName, contractName, chainID, bSmcErr, keyStorePath)
 	if err != nil {
 		return
 	}
@@ -208,77 +371,16 @@ func registerOrg(name, password, orgName, gasLimit, note, keyStorePath, chainID 
 	if err != nil {
 		return
 	}
-	params := makeParams(orgName)
-	txStr := GenerateTx(contract.Address, methodID, params, nonce, int64(uGasLimit), note, privStr)
+	txStr := GenerateTx(contract.Address, methodID, values, nonce, int64(uGasLimit), note, privStr)
 
 	result, err = CommitTx(chainID, txStr)
-	if err != nil {
-		return
-	}
-	return
-}
 
-func registerToken(name, password, tokenName, tokenSymbol, totalSupply, gasPrice, gasLimit, note, keyStorePath, chainID,
-	addSupplyEnabled, burnEnabled string, bNonceErr, bSmcErr bool, methodID uint32) (result *CommitTxResult, err error) {
-
-	if keyStorePath == "" {
-		keyStorePath = ".keystore"
-	}
-
-	if chainID == "" {
-		chainID = common.GetBCCConfig().DefaultChainID
-	}
-	tx2.Init(chainID)
-
-	nonce, err := getNonce(keyStorePath, chainID, name, password, bNonceErr)
-	if err != nil {
-		return
-	}
-
-	contract, err := getContract(genesisOrgName, tokenIssue, chainID, bSmcErr, keyStorePath)
-	if err != nil {
-		return
-	}
-
-	uGasLimit, err := strconv.ParseUint(gasLimit, 10, 64)
-	if err != nil {
-		return
-	}
-
-	privStr, err := getAccountPriKey(keyStorePath, name, password)
-	if err != nil {
-		return
-	}
-
-	a, err := strconv.ParseBool(addSupplyEnabled)
-	if err != nil {
-		return
-	}
-	b, err := strconv.ParseBool(burnEnabled)
-	if err != nil {
-		return
-	}
-
-	t := bn.NewNumberStringBase(totalSupply, 10)
-
-	gp, err := strconv.Atoi(gasPrice)
-	if err != nil {
-		return
-	}
-
-	params := makeParams(tokenName, tokenSymbol, t, a, b, int64(gp))
-	txStr := GenerateTx(contract.Address, methodID, params, nonce, int64(uGasLimit), note, privStr)
-
-	result, err = CommitTx(chainID, txStr)
-	if err != nil {
-		return
-	}
 	return
 }
 
 //GenerateTx generate tx with one contract method request
-func GenerateTx(contract types.Address, method uint32, params []interface{}, nonce uint64, gaslimit int64, note string, privKey string) string {
-	items := tx2.WrapInvokeParams(params...)
+func GenerateTx(contract types.Address, method uint32, bccParamss []interface{}, nonce uint64, gaslimit int64, note string, privKey string) string {
+	items := tx2.WrapInvokeParams(bccParamss...)
 	message := types.Message{
 		Contract: contract,
 		MethodID: method,
@@ -288,77 +390,75 @@ func GenerateTx(contract types.Address, method uint32, params []interface{}, non
 	return tx2.WrapTx(payload, privKey)
 }
 
-func deployContract(name, password, contractName, version, orgName, codeFile,
-	effectHeight, owner, keyStorePath, gasLimit, note, chainID string, bNonceErr, bSmcErr bool, methodID uint32) (result *CommitTxResult, err error) {
+func getRegisterTokenData(bccParams RegisterTokenParam) (totalSupply bn.Number, addSupplyEnabled, burnEnabled bool, gasPrice int, err error) {
 
-	if keyStorePath == "" {
-		keyStorePath = ".keystore"
+	addSupplyEnabled, err = strconv.ParseBool(bccParams.AddSupplyEnabled)
+	if err != nil {
+		return
 	}
-
-	if chainID == "" {
-		chainID = common.GetBCCConfig().DefaultChainID
-	}
-	tx2.Init(chainID)
-
-	nonce, err := getNonce(keyStorePath, chainID, name, password, bNonceErr)
+	burnEnabled, err = strconv.ParseBool(bccParams.BurnEnabled)
 	if err != nil {
 		return
 	}
 
-	contract, err := getContract(genesisOrgName, smcContractName, chainID, bSmcErr, keyStorePath)
+	totalSupply = bn.NewNumberStringBase(bccParams.TotalSupply, 10)
+	if totalSupply.IsLEI(0) {
+		err = errors.New("invalid totalSupply")
+		return
+	}
+
+	gasPrice, err = strconv.Atoi(bccParams.GasPrice)
 	if err != nil {
 		return
 	}
 
-	uGasLimit, err := strconv.ParseUint(gasLimit, 10, 64)
+	return
+}
+
+func getDeployContractData(bccParams DeployContractParam) (
+	effectHeightInt int,
+	orgID string,
+	codeHash []byte,
+	codeData []byte,
+	devSigStr string,
+	orgSigStr string,
+	err error) {
+
+	// setup data
+	codeData, err = ioutil.ReadFile(bccParams.CodeFile)
 	if err != nil {
 		return
 	}
 
-	codeData, err := ioutil.ReadFile(codeFile)
+	devSigStr, err = getSigStr(bccParams.CodeFile + ".sig")
 	if err != nil {
 		return
 	}
 
-	devSigStr, err := getSigStr(codeFile + ".sig")
+	orgSigStr, err = getSigStr(bccParams.CodeFile + ".sig.sig")
 	if err != nil {
 		return
 	}
 
-	orgSigStr, err := getSigStr(codeFile + ".sig.sig")
+	codeHash = sha3.Sum256(codeData)
+	effectHeightInt, err = strconv.Atoi(bccParams.EffectHeight)
 	if err != nil {
 		return
 	}
 
-	codeHash := sha3.Sum256(codeData)
-	effectHeightInt, err := strconv.Atoi(effectHeight)
-	if err != nil {
-		return
-	}
-
-	privStr, err := getAccountPriKey(keyStorePath, name, password)
-	if err != nil {
-		return
-	}
 	bh := helper.BlockChainHelper{}
-	orgID := bh.CalcOrgID(orgName)
-	params := makeParams(contractName, version, orgID, codeHash, codeData, devSigStr, orgSigStr, int64(effectHeightInt), owner)
-	txStr := GenerateTx(contract.Address, methodID, params, nonce, int64(uGasLimit), note, privStr)
+	orgID = bh.CalcOrgID(bccParams.OrgName)
 
-	result, err = CommitTx(chainID, txStr)
-	if err != nil {
-		return
-	}
 	return
 }
 
 func makeParams(values ...interface{}) []interface{} {
-	params := make([]interface{}, 0)
+	bccParamss := make([]interface{}, 0)
 	for _, v := range values {
-		params = append(params, v)
+		bccParamss = append(bccParamss, v)
 	}
 
-	return params
+	return bccParamss
 }
 
 func getSigStr(path string) (s string, err error) {

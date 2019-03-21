@@ -74,6 +74,9 @@ var (
 	// transfer
 	to    string
 	value string
+
+	pubKeys  string
+	deployer types.Address
 )
 
 func Execute() error {
@@ -204,11 +207,33 @@ var registerOrgCmd = &cobra.Command{
 	},
 }
 
+// set organization's signers
+var setSignersCmd = &cobra.Command{
+	Use:   "setSigners",
+	Short: "Set organization's signers",
+	Long:  "Set organization's signers",
+	Args:  cobra.ExactArgs(0),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return setSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePath, chainID)
+	},
+}
+
+// authorize deploy smart contract account
+var authorizeCmd = &cobra.Command{
+	Use:   "authorize",
+	Short: "Authorize deploy smart contract account",
+	Long:  "Authorize deploy smart contract account",
+	Args:  cobra.ExactArgs(0),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return authorize(name, password, orgName, deployer, gasLimit, note, keyStorePath, chainID)
+	},
+}
+
 // transfer
 var transferCmd = &cobra.Command{
 	Use:   "transfer",
-	Short: "transfer token to someone with value",
-	Long:  "transfer token to someone with value",
+	Short: "Transfer token to someone with value",
+	Long:  "Transfer token to someone with value",
 	Args:  cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return transfer(name, password, tokenName, gasLimit, note, to, value, keyStorePath, chainID)
@@ -311,6 +336,26 @@ func registerOrgFlags() {
 	registerOrgCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 	registerOrgCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
 }
+func setSignersFlags() {
+	setSignersCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
+	setSignersCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
+	setSignersCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "organization name")
+	setSignersCmd.PersistentFlags().StringVarP(&pubKeys, "pubKeys", "s", "", "signer's pubKey")
+	setSignersCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
+	setSignersCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
+	setSignersCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
+	setSignersCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
+}
+func authorizeFlags() {
+	authorizeCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
+	authorizeCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
+	authorizeCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "organization name")
+	authorizeCmd.PersistentFlags().StringVarP(&deployer, "deployer", "d", "", "deployer's address")
+	authorizeCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
+	authorizeCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
+	authorizeCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
+	authorizeCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
+}
 func transferFlags() {
 	transferCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
 	transferCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
@@ -335,6 +380,8 @@ func addFlags() {
 	commitTxCmdFlags()
 	versionCmdFlags()
 	registerOrgFlags()
+	setSignersFlags()
+	authorizeFlags()
 	deployContractFlags()
 	registerTokenFlags()
 	transferFlags()
@@ -352,6 +399,8 @@ func addCommand() {
 	RootCmd.AddCommand(versionCmd)
 	RootCmd.AddCommand(deployContractCmd)
 	RootCmd.AddCommand(registerOrgCmd)
+	RootCmd.AddCommand(setSignersCmd)
+	RootCmd.AddCommand(authorizeCmd)
 	RootCmd.AddCommand(registerTokenCmd)
 	RootCmd.AddCommand(transferCmd)
 	RootCmd.AddCommand(runAsRPCServiceCmd)
