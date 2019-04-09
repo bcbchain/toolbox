@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -192,7 +191,7 @@ type Handshaker struct {
 	stateDB      dbm.DB
 	initialState sm.State
 	store        types.BlockStore
-	appState     json.RawMessage
+	genDoc       *types.GenesisDoc
 	logger       log.Logger
 
 	nBlocks int // number of blocks applied to the state
@@ -200,20 +199,25 @@ type Handshaker struct {
 	rpcPort string
 }
 
-func NewHandshaker(stateDB dbm.DB, state sm.State, store types.BlockStore, appState json.RawMessage, conf *config.Config) *Handshaker {
+func NewHandshaker(stateDB dbm.DB, state sm.State, store types.BlockStore, genDoc *types.GenesisDoc, conf *config.Config) *Handshaker {
 
-	blob, err := types.FillUpWithContractCode(conf, appState)
-	if err != nil {
-		cmn.Exit(err.Error())
+	var err error
+	blob := genDoc.AppStateJSON
+	if len(genDoc.ChainVersion) > 0 {
+		blob, err = types.FillUpWithContractCode(conf, genDoc.AppStateJSON)
+		if err != nil {
+			cmn.Exit(err.Error())
+		}
 	}
 
 	spl := strings.Split(conf.RPC.ListenAddress, ":")
 	lPort := spl[len(spl)-1]
+	genDoc.AppStateJSON = blob
 	return &Handshaker{
 		stateDB:      stateDB,
 		initialState: state,
 		store:        store,
-		appState:     blob,
+		genDoc:       genDoc,
 		logger:       log.NewNopLogger(),
 		nBlocks:      0,
 		rpcPort:      lPort,
@@ -277,11 +281,25 @@ func (h *Handshaker) ReplayBlocks(state sm.State, appStateData []byte, appBlockH
 	// If appBlockHeight == 0 it means that we are at genesis and hence should send InitChain
 	if appBlockHeight == 0 && len(appHash) == 0 {
 		h.logger.Info("Handshake, calls initChain")
-		validators := types.TM2PB.Validators(state.Validators)
+		// If only appProxy lost its stateDB, and validators have been updated,
+		// there would be appHash error when replay blocks from state.
+		// So for initChain, using validators from genesisDoc instead of state.
+		//validators := types.TM2PB.Validators(state.Validators)
+		validators := make([]abci.Validator, 0)
+		for _, val := range h.genDoc.Validators {
+			validators = append(validators, abci.Validator{
+				PubKey:     val.PubKey.Bytes(),
+				Power:      uint64(val.Power),
+				RewardAddr: val.RewardAddr,
+				Name:       val.Name,
+			})
+		}
+
 		req := abci.RequestInitChain{
 			Validators:    validators,
 			ChainId:       h.initialState.ChainID,
-			AppStateBytes: h.appState,
+			ChainVersion:  h.initialState.ChainVersion,
+			AppStateBytes: h.genDoc.AppStateJSON,
 		}
 		res, err := proxyApp.Consensus().InitChainSync(req)
 		if err != nil {

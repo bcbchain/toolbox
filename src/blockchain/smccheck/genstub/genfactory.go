@@ -30,7 +30,7 @@ func NewInterfaceStub(smc sdk.ISmartContract, contractName string) types.IContra
 
 	switch contract.Version() {
 	{{- range $i1,$v1 := $.Versions}}
-	case "{{$v1}}":
+	case "{{v $v1}}":
 		return {{replace $v1}}.NewInterStub(smc)
 	{{- end}}
 	}
@@ -48,6 +48,9 @@ func GenStFactory(res *parsecode.Result, outDir string) error {
 	funcMap := template.FuncMap{
 		"replace": func(version string) string {
 			return strings.Replace(version, ".", "_", -1)
+		},
+		"v": func(version string) string {
+			return version[1:]
 		},
 	}
 

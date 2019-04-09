@@ -1,6 +1,7 @@
 package main
 
 import (
+	"blockchain/smcsdk/sdk/std"
 	"blockchain/types"
 	"bytes"
 	"cmd/bcc/core"
@@ -8,7 +9,10 @@ import (
 	"fmt"
 	"os/exec"
 	"strconv"
+	"strings"
 )
+
+var Version = make(map[string][]string)
 
 // command line method
 func call(name, password, orgName, contractName, methodName, file, params, splitBy, pay, gasLimit, note, chainID, keyStorePath string) error {
@@ -109,6 +113,10 @@ func balance(accAddress types.Address, name, password, tokenName, allStr string,
 
 func nonce(accAddress types.Address, name, password, chainID, keyStorePath string) error {
 
+	if accAddress == "" && name == "" {
+		fmt.Println("Need name or accAddress, cannot all be empty")
+		return nil
+	}
 	result, err := core.Nonce(accAddress, name, password, chainID, keyStorePath)
 	if err != nil {
 		Error(fmt.Sprintf("Query nonce \"%v\" information failed, %v", accAddress, err.Error()))
@@ -172,6 +180,11 @@ func deployContract(name, password, contractName, version, orgName, codeFile,
 		Error(err.Error())
 	}
 
+	// 记录合约迭代版本
+	//myVersion := new(core.VersionOfContract)
+	//myVersion.Version[name] = append(myVersion.Version[name], version)
+	Version[name] = append(Version[name], version)
+
 	fmt.Println("OK")
 	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
 	fmt.Printf("Response: %s\n", string(jsIndent))
@@ -229,9 +242,9 @@ func registerOrg(name, password, orgName, gasLimit, note, keyStorePath, chainID 
 	return err
 }
 
-func setSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePath, chainID string) error {
+func setOrgSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePath, chainID string) error {
 
-	param := core.SetSignersParam{
+	param := core.SetOrgSignersParam{
 		OrgName:      orgName,
 		PubKeys:      pubKeys,
 		ChainID:      chainID,
@@ -240,7 +253,7 @@ func setSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePath, 
 		Note:         note,
 	}
 
-	result, err := core.SetSigners(name, password, param)
+	result, err := core.SetOrgSigners(name, password, param)
 	if err != nil {
 		Error(err.Error())
 	}
@@ -252,9 +265,9 @@ func setSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePath, 
 	return err
 }
 
-func authorize(name, password, orgName, deployer, gasLimit, note, keyStorePath, chainID string) error {
+func setOrgDeployer(name, password, orgName, deployer, gasLimit, note, keyStorePath, chainID string) error {
 
-	param := core.AuthorizeParam{
+	param := core.SetOrgDeployerParam{
 		OrgName:      orgName,
 		Deployer:     deployer,
 		ChainID:      chainID,
@@ -263,7 +276,7 @@ func authorize(name, password, orgName, deployer, gasLimit, note, keyStorePath, 
 		Note:         note,
 	}
 
-	result, err := core.Authorize(name, password, param)
+	result, err := core.SetOrgDeployer(name, password, param)
 	if err != nil {
 		Error(err.Error())
 	}
@@ -313,4 +326,189 @@ func runAsRPCService() (err error) {
 	fmt.Println("Execute finished")
 
 	return nil
+}
+
+// Query the contract information based on the parameters
+func ContractInfo(orgName, contractName, orgID, contractAddr string) (err error) {
+
+	if orgID != "" && contractName != "" && contractAddr == "" {
+		contractList, err := core.ContractInfo(chainID, orgID, contractName)
+		if err != nil {
+			Error(err.Error())
+		}
+
+		for _, v := range contractList {
+
+			// 校验其他输入参数
+			if orgName != "" {
+				OrgInfo, err := core.QueryOrgInfo(orgID, chainID)
+				if err != nil {
+					Error(err.Error())
+				}
+
+				if orgName != OrgInfo.Name {
+					fmt.Println("Error: Input orgName is wrong.")
+					return err
+				}
+			}
+
+			err = ParamsExample(&v)
+			if err != nil {
+				Error(err.Error())
+			}
+		}
+
+	} else if orgName != "" && contractName != "" && contractAddr == "" {
+		contract, err := core.QueryContractInfo(orgName, contractName, chainID, keyStorePath)
+		if err != nil {
+			Error(err.Error())
+		}
+
+		// 校验其他输入参数
+		if orgID != "" && orgID != contract.OrgID {
+			fmt.Println("Error: Input orgID is wrong.")
+			return err
+		}
+
+		err = ParamsExample(contract)
+		if err != nil {
+			Error(err.Error())
+		}
+
+	} else if contractAddr != "" {
+		contract, err := core.ContractInfoWithAddr(chainID, contractAddr)
+		if err != nil {
+			Error(err.Error())
+		}
+
+		// 校验其他输入参数
+		if orgName != "" && orgID != "" {
+			OrgInfo, err := core.QueryOrgInfo(orgID, chainID)
+			if err != nil {
+				Error(err.Error())
+			}
+
+			if orgName != OrgInfo.Name {
+				fmt.Println("Error: Input orgName is wrong.")
+				return err
+			}
+		}
+		if orgID != "" && orgID != contract.OrgID {
+			fmt.Println("Error: orgID orgName is wrong.")
+			return err
+		}
+
+		err = ParamsExample(contract)
+		if err != nil {
+			Error(err.Error())
+		}
+
+	} else if orgName == "" && contractName == "" && orgID == "" && contractAddr == "" {
+		ContractAddrList, err := core.AllContractInfo(chainID)
+		if err != nil {
+			Error(err.Error())
+		}
+
+		for _, v := range ContractAddrList {
+			fmt.Println("OK")
+			jsIndent, _ := json.MarshalIndent(&v, "", "\t")
+			fmt.Printf("Response: %s\n", string(jsIndent))
+		}
+	} else {
+		fmt.Println("Insufficient input parameters")
+		return err
+	}
+
+	return
+}
+
+func ParamsExample(contract *std.Contract) (err error) {
+
+	address, _ := json.MarshalIndent(&contract.Address, "", "\t")
+	account, _ := json.MarshalIndent(&contract.Account, "", "\t")
+	orgid, _ := json.MarshalIndent(&contract.OrgID, "", "\t")
+	name, _ := json.MarshalIndent(&contract.Name, "", "\t")
+	owner, _ := json.MarshalIndent(&contract.Owner, "", "\t")
+	codeHash, _ := json.MarshalIndent(&contract.CodeHash, "", "\t")
+	version, _ := json.MarshalIndent(&contract.Version, "", "\t")
+	//version = strings.Join(versionList, ",")
+	EffectHeight, _ := json.MarshalIndent(&contract.EffectHeight, "", "\t")
+	loseEffect, _ := json.MarshalIndent(&contract.LoseHeight, "", "\t")
+	keyPrefix, _ := json.MarshalIndent(&contract.KeyPrefix, "", "\t")
+	interfaces, _ := json.MarshalIndent(&contract.Interfaces, "", "\t")
+	token, _ := json.MarshalIndent(&contract.Token, "", "\t")
+
+	fmt.Println("OK")
+	fmt.Printf("Response: \n")
+	fmt.Printf("    Version: %s\n", string(version))
+	fmt.Printf("    Name: %s\n", string(name))
+	fmt.Printf("    OrgID: %s\n", string(orgid))
+	fmt.Printf("    Address: %s\n", string(address))
+	fmt.Printf("    Account: %s\n", string(account))
+	fmt.Printf("    Owner: %s\n", string(owner))
+	fmt.Printf("    CodeHash: %s\n", string(codeHash))
+	fmt.Printf("    EffectHeight: %s\n", string(EffectHeight))
+	fmt.Printf("    LoseHeight: %s\n", string(loseEffect))
+	fmt.Printf("    KeyPrefix: %s\n", string(keyPrefix))
+	fmt.Printf("    Token: %s\n", string(token))
+	fmt.Printf("    Interfaces: %s\n", string(interfaces))
+	fmt.Printf("    Method: \n")
+
+	var example2 = ""
+	for _, v := range contract.Methods {
+
+		leftBracketIndex := strings.Index(v.ProtoType, "(")
+		rightBracketIndex := strings.Index(v.ProtoType, ")")
+		splitTypes := strings.Split(v.ProtoType[leftBracketIndex+1:rightBracketIndex], ",")
+
+		example := make([]string, 0)
+		for _, v := range splitTypes {
+			v = checkType(v)
+			example = append(example, v)
+			example2 = strings.Join(example, "@")
+		}
+
+		fmt.Printf("          %s\n          Params： %s\n\n", v.ProtoType, example2)
+	}
+
+	fmt.Println("PS: If the string is just a string, Example: \"example\"\n " +
+		"If the string is a special string, Example: \"recvFeeRatio\":[500,500], \"recvFeeAddr\":[\"localKrHJUVGAt4R9gcfsBthu3dWJR7bAYq1c8\",\"localNwdwjpDotDDLGiB9pARk1CcSM71bdgTef\"]")
+
+	return
+}
+
+func checkType(Type interface{}) string {
+
+	switch Type {
+
+	case "int", "int8", "int16", "int32", "int64":
+		return "200000"
+
+	case "uint", "uint8", "uint16", "uint32", "uint64":
+		return "200000"
+
+	case "float32", "float64":
+		return "20.11"
+
+	case "types.Address":
+		return "localL9BzYNYns5VCRaJgfHEBJLzS1bhpHjx7j"
+
+	case "bn.Number":
+		return "1000000000000"
+
+	case "bool":
+		return "true"
+
+	case "byte":
+		return "0x01bd6c29d63f5f32aa33955f26a28459988edea4de517f77372e77db33958e6e"
+
+	case "types.Hash", "types.HexBytes", "types.PubKey", "[]byte":
+		return "0x01bd6c29d63f5f32aa33955f26a28459988edea4de517f77372e77db33958e6e"
+
+	case "string":
+		return "example"
+
+	default:
+		return ""
+	}
 }

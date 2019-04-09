@@ -141,7 +141,7 @@ func CalcKey(name, version string) string {
 	if strings.HasPrefix(name, "token-template-") {
 		name = "token-issue"
 	}
-	return strings.Replace(name, "-", "", -1) + strings.Replace(version, ".", "", -1)
+	return name + strings.Replace(version, ".", "", -1)
 }
 
 func emitFeeReceipt(smc sdk.ISmartContract,receipt std.Fee) types.KVPair {

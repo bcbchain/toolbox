@@ -48,7 +48,7 @@ func Init() {
 		//File doesn't exist, terminate the process
 		panic(err.Error())
 	}
-	sigFile := dir + "/tendermint-forks-signature.json"
+	sigFile := dir + "/tendermint-forks.json.sig"
 	if _, err = os.Stat(forksFile); err != nil {
 		//File doesn't exist, terminate the process
 		panic(err.Error())

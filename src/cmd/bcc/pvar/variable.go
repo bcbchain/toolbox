@@ -141,6 +141,7 @@ func createBaseVar(typeStr string, value interface{}, isMapKey bool) (v interfac
 		v = b
 	case "byte":
 		var b []byte
+		resBytes = []byte(strings.Trim(string(resBytes), `"`))
 		b, err = hex.DecodeString(string(resBytes[2:]))
 		if err == nil {
 			if len(b) == 1 {

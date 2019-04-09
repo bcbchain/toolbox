@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/tendermint/go-crypto"
@@ -91,6 +92,12 @@ func packsmc(keyStorePath, walName, walPassword, smcPath string) (err error) {
 	tempDir, err := ioutil.TempDir(".", "temp")
 	defer os.RemoveAll(tempDir)
 
+	smcPath, err = filepath.Abs(smcPath)
+	if err != nil {
+		Error(fmt.Sprintf("Invalid smcPath \"%v\", %v", smcPath, err.Error()))
+		return
+	}
+
 	err = fs.CopyDir(smcPath, tempDir+"/", "(.go)$", "(_autogen_)")
 	if err != nil {
 		Error(fmt.Sprintf("Copy \"%v\" failed, %v", smcPath, err.Error()))
@@ -109,15 +116,31 @@ func packsmc(keyStorePath, walName, walPassword, smcPath string) (err error) {
 		return
 	}
 
-	err = acc.Sign2File(sha3.Sum256(tarByte), contractTarName+".sig")
+	codeHash := sha3.Sum256(tarByte)
+	err = acc.Sign2File(codeHash, contractTarName+".sig")
 	if err != nil {
 		Error(fmt.Sprintf("Sign to \"%v\" failed, %v", contractTarName, err.Error()))
+		return
+	}
+
+	contractHashFile := res.ContractName + "-" + res.Version + ".hash"
+	fi, err := os.Create(contractHashFile)
+	defer fi.Close()
+	if err != nil {
+		Error(fmt.Sprintf("Create file \"%v\" failed, %v", contractHashFile, err.Error()))
+		return
+	}
+
+	_, err = fi.Write([]byte(hex.EncodeToString(codeHash)))
+	if err != nil {
+		Error(fmt.Sprintf("Write code hash to \"%v\" failed, %v", contractHashFile, err.Error()))
 		return
 	}
 
 	fmt.Println("OK")
 	fmt.Println("OutputFile: " + contractTarName)
 	fmt.Println("            " + contractTarName + ".sig")
+	fmt.Println("            " + contractHashFile)
 	return
 }
 

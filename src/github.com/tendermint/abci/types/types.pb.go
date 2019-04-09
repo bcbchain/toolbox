@@ -87,12 +87,13 @@ type Request struct {
 }
 
 type AppState struct {
-	BlockHeight int64             `json:"block_height,omitempty"`  //最后一个确认的区块高度
-	AppHash     crypto.Hash       `json:"app_hash,omitempty"`      //最后一个确认区块的AppHash
-	TxsHashList []crypto.Hash     `json:"txs_hash_list,omitempty"` //最后一个确认区块的交易Hash列表
-	Rewards     []common.KVPair   `json:"rewards,omitempty"`       //最后一个确认区块奖励分配
-	Fee         uint64            `json:"fee,omitempty"`           //最后一个确认区块的交易费用
-	BeginBlock  RequestBeginBlock `json:"beginBlock,omitempty"`    // Request Begin Block
+	BlockHeight  int64             `json:"block_height,omitempty"`  //最后一个确认的区块高度
+	AppHash      crypto.Hash       `json:"app_hash,omitempty"`      //最后一个确认区块的AppHash
+	TxsHashList  []crypto.Hash     `json:"txs_hash_list,omitempty"` //最后一个确认区块的交易Hash列表
+	Rewards      []common.KVPair   `json:"rewards,omitempty"`       //最后一个确认区块奖励分配
+	Fee          uint64            `json:"fee,omitempty"`           //最后一个确认区块的交易费用
+	ChainVersion int64             `json:"chain_version,omitempty"` //最后一个确认区块
+	BeginBlock   RequestBeginBlock `json:"beginBlock,omitempty"`    // Request Begin Block
 }
 
 func ByteToAppState(appstate []byte) *AppState {
@@ -560,7 +561,8 @@ func (m *RequestSetOption) GetValue() string {
 type RequestInitChain struct {
 	Validators    []Validator `protobuf:"bytes,1,rep,name=validators" json:"validators"`
 	ChainId       string      `protobuf:"bytes,2,rep,name=chain_id" json:"chain_id"`
-	AppStateBytes []byte      `protobuf:"bytes,3,opt,name=app_state_bytes,json=appStateBytes,proto3" json:"app_state_bytes,omitempty"`
+	ChainVersion  int64       `protobuf:"varint,3,rep,name=chain_version" json:"chain_version"`
+	AppStateBytes []byte      `protobuf:"bytes,4,opt,name=app_state_bytes,json=appStateBytes,proto3" json:"app_state_bytes,omitempty"`
 }
 
 func (m *RequestInitChain) Reset()                    { *m = RequestInitChain{} }
@@ -1509,7 +1511,8 @@ func (m *ResponseDeliverTx) GetFee() uint64 {
 
 type ResponseEndBlock struct {
 	ValidatorUpdates      []Validator      `protobuf:"bytes,1,rep,name=validator_updates,json=validatorUpdates" json:"validator_updates"`
-	ConsensusParamUpdates *ConsensusParams `protobuf:"bytes,2,opt,name=consensus_param_updates,json=consensusParamUpdates" json:"consensus_param_updates,omitempty"`
+	ChainVersion          int64            `protobuf:"varint,2,rep,name=chain_version,json=chainVersion" json:"chainVersion,omitempty"`
+	ConsensusParamUpdates *ConsensusParams `protobuf:"bytes,3,opt,name=consensus_param_updates,json=consensusParamUpdates" json:"consensus_param_updates,omitempty"`
 }
 
 func (m *ResponseEndBlock) Reset()                    { *m = ResponseEndBlock{} }
@@ -1700,6 +1703,7 @@ type Header struct {
 	RewardAddress   string       `protobuf:"bytes,13,opt,name=reward_address,json=rewardAddress,proto3" json:"reward_address,omitempty"`
 	RandomeOfBlock  []byte       `protobuf:"bytes,14,opt,name=random_of_block,json=randomOfBlock,proto3" json:"random_of_block,omitempty"`
 	Version         string       `protobuf:"bytes,15,opt,name=version,json=version,proto3" json:"version,omitempty"`
+	ChainVersion    int64        `protobuf:"varint,16,opt,name=chain_version,json=chainVersion,proto3" json:"chain_version,omitempty"`
 }
 
 func (m *Header) Reset()                    { *m = Header{} }

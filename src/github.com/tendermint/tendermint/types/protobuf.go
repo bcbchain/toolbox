@@ -25,6 +25,8 @@ func (tm2pb) Header(header *Header) types.Header {
 		LastAllocation:  header.LastAllocation,
 		ProposerAddress: header.ProposerAddress,
 		RewardAddress:   header.RewardAddress,
+		Version:         header.Version,
+		ChainVersion:    header.ChainVersion,
 	}
 	softforks.Init()
 	if softforks.IsForkForV1023233(header.Height) {

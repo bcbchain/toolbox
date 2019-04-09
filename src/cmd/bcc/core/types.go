@@ -56,7 +56,7 @@ type RegisterOrgParam struct {
 	Note         string `json:"note"`
 }
 
-type SetSignersParam struct {
+type SetOrgSignersParam struct {
 	OrgName      string `json:"orgName"`
 	PubKeys      string `json:"pubKeys"`
 	ChainID      string `json:"chainID"`
@@ -65,7 +65,7 @@ type SetSignersParam struct {
 	Note         string `json:"note"`
 }
 
-type AuthorizeParam struct {
+type SetOrgDeployerParam struct {
 	OrgName      string        `json:"orgName"`
 	Deployer     types.Address `json:"deployer"`
 	ChainID      string        `json:"chainID"`
@@ -180,3 +180,8 @@ type MethodInfo struct {
 	MethodID  uint32
 	ParamData []byte
 }
+
+// VersionOfContract Contract version of the collection
+//type VersionOfContract struct {
+//	Version map[string][]string `json:"version"` //合约版本
+//}

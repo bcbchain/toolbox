@@ -39,6 +39,16 @@ func (t *TestMessage) testContract() {
 	}{
 		{tempAddr.Address(), "contract", "1.0", "", []byte("hello"), 100, 200, conMethods, conMethods, token.Address(), "正常用例", types.CodeOK, ""},
 		{"", "", "", "", []byte{}, 0, 0, nil, nil, "", "正常用例-contract所有值都为空", types.CodeOK, ""},
+		{tempAddr.Address(), "", "", "", []byte{}, 0, 0, nil, nil, "", "正常用例-合约地址不为空", types.CodeOK, ""},
+		{"", "test", "", "", []byte{}, 0, 0, nil, nil, "", "正常用例-合约名字不为空", types.CodeOK, ""},
+		{"", "", "2.0", "", []byte{}, 0, 0, nil, nil, "", "正常用例-合约版本号不为空", types.CodeOK, ""},
+		{"", "", "", "a", []byte{}, 0, 0, nil, nil, "", "正常用例-合约前缀不为空", types.CodeOK, ""},
+		{"", "", "", "a", []byte("hello"), 0, 0, nil, nil, "", "正常用例-合约codeHash不为空", types.CodeOK, ""},
+		{"", "", "", "a", []byte{}, 10, 0, nil, nil, "", "正常用例-合约生效高度不为空", types.CodeOK, ""},
+		{"", "", "", "a", []byte{}, 0, 10, nil, nil, "", "正常用例-合约失效高度不为空", types.CodeOK, ""},
+		{"", "", "", "a", []byte{}, 0, 0, conMethods, nil, "", "正常用例-合约Methos不为空", types.CodeOK, ""},
+		{"", "", "", "a", []byte{}, 0, 0, nil, conMethods, "", "正常用例-合约Interface不为空", types.CodeOK, ""},
+		{"", "", "", "a", []byte{}, 0, 0, nil, conMethods, token.Address(), "正常用例-合约token地址不为空", types.CodeOK, ""},
 	}
 	for i, c := range cases {
 		contract := object.NewContract(t.sdk,
@@ -64,7 +74,7 @@ func (t *TestMessage) testContract() {
 		Assert(t.sdk.Message().Contract().Version() == c.ContractVersion)
 		Assert(t.sdk.Message().Contract().KeyPrefix() == c.ContractPrefix)
 		Assert(t.sdk.Message().Contract().EffectHeight() == c.ContractEffectHeight)
-		Assert(t.sdk.Message().Contract().LoseEffect() == c.ContractLoseHeight)
+		Assert(t.sdk.Message().Contract().LoseHeight() == c.ContractLoseHeight)
 		Assert(t.sdk.Message().Contract().Token() == c.ContractToken)
 
 		for index, v := range c.ContractCodeHash {

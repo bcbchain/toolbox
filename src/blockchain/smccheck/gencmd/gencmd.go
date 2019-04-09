@@ -116,6 +116,8 @@ func build(transID int64, txID int64, contractMeta std.ContractMeta) std.BuildRe
 		if err != nil {
 			panic(err)
 		}
+	} else {
+		cli.SetTimeOut(180)
 	}
 
 	resBytes, _ := jsoniter.Marshal(contractMeta)
@@ -264,8 +266,8 @@ func Invoke(req map[string]interface{}) (interface{}, error) {
         var bal std.AccountInfo
         jsoniter.Unmarshal(callParam.ToBalance, &bal)
         key := std.KeyOfAccountToken(callParam.To, bal.Address)
-		 balances[key] = bal
-		 defer delete(balances, key)
+		balances[key] = bal
+		defer delete(balances, key)
     }
 
 	sdkReceipts := make([]sdkType.KVPair, 0)

@@ -255,11 +255,12 @@ func genesis(chainID, password, pathOfCharter, pathOfOutput string) error {
 
 	//构造创世对象
 	doc := GenesisDoc{
-		ChainID:     chainID,
-		GenesisTime: time.Now(),
-		AppHash:     "",
-		AppState:    appState,
-		Validators:  validators,
+		ChainID:      chainID,
+		ChainVersion: "2",
+		GenesisTime:  time.Now(),
+		AppHash:      "",
+		AppState:     appState,
+		Validators:   validators,
 	}
 
 	//输出创世文件

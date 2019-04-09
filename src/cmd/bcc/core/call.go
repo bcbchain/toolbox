@@ -24,10 +24,10 @@ func Call(name, password string, bccParams CallParam) (result *CommitTxResult, e
 	splitBy, keyStorePath, chainID := prepare(bccParams.SplitBy, bccParams.KeyStorePath, bccParams.ChainID)
 
 	// require not empty
-	requireNotEmpty("name", name)
-	requireNotEmpty("password", password)
 	requireNotEmpty("orgName", bccParams.OrgName)
 	requireNotEmpty("contractName", bccParams.Contract)
+	requireNotEmpty("name", name)
+	requireNotEmpty("password", password)
 	requireNotEmpty("methodName", bccParams.Method)
 
 	// check pay
@@ -216,6 +216,24 @@ func readParamFile(file string) (params string, err error) {
 		return
 	}
 	params = string(b)
+
+	return
+}
+
+// 查询合约信息
+func QueryContractInfo(OrgName, ContractName, chainID, keyStorePath string) (contract *std.Contract, err error) {
+
+	contract, err = getContract(OrgName, ContractName, chainID, false, keyStorePath)
+	if err != nil {
+		return
+	}
+
+	if contract.Methods == nil {
+		contract, err = getContract(OrgName, ContractName, chainID, true, keyStorePath)
+		if err != nil {
+			return
+		}
+	}
 
 	return
 }

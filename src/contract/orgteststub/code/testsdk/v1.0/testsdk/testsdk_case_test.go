@@ -41,7 +41,7 @@ func testContractInfo(test *TestObject, owner sdk.IAccount) {
 	ut.AssertEquals(test.obj.sdk.Message().Contract().KeyPrefix(), "/"+contractName)
 	//Version
 	//EffectHeight
-	//LoseEffect
+	//LoseHeight
 	//Methods
 	//Token
 }

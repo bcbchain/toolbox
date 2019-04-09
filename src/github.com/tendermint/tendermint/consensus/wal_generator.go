@@ -52,7 +52,7 @@ func WALWithNBlocks(numBlocks int) (data []byte, err error) {
 		return nil, errors.Wrap(err, "failed to make genesis state")
 	}
 	blockStore := bc.NewBlockStore(blockStoreDB)
-	handshaker := NewHandshaker(stateDB, state, blockStore, genDoc.AppStateJSON, config)
+	handshaker := NewHandshaker(stateDB, state, blockStore, genDoc, config)
 	proxyApp := proxy.NewAppConns(proxy.NewLocalClientCreator(app), handshaker)
 	proxyApp.SetLogger(logger.With("module", "proxy"))
 	if err := proxyApp.Start(); err != nil {

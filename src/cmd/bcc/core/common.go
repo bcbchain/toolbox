@@ -8,9 +8,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/tendermint/go-crypto"
 	"strconv"
 	"strings"
+
+	"github.com/tendermint/go-crypto"
 )
 
 const (
@@ -128,6 +129,11 @@ func checkPay(pay string) (value bn.Number, token string, err error) {
 		}
 
 		valueStr = strings.Replace(valueStr, ".", "", -1)
+		zeroCount := 9 - (len(valueStr) - potIndex)
+		for zeroCount > 0 {
+			valueStr += "0"
+			zeroCount--
+		}
 		value = bn.NewNumberStringBase(valueStr, 10)
 		if value.IsLEI(0) {
 			err = errors.New("pay option's format error, value must be number and greater than zero")
@@ -153,4 +159,31 @@ func checkVersion(version string) (err error) {
 	}
 
 	return
+}
+
+// CheckUTF8 check format
+func CheckUTF8(buf []byte) bool {
+	nBytes := 0
+	for i := 0; i < len(buf); i++ {
+		if nBytes == 0 {
+			if (buf[i] & 0x80) != 0 {
+				for (buf[i] & 0x80) != 0 {
+					buf[i] <<= 1
+					nBytes++
+				}
+
+				if nBytes < 2 || nBytes > 6 {
+					return false
+				}
+
+				nBytes--
+			}
+		} else {
+			if buf[i]&0xc0 != 0x80 {
+				return false
+			}
+			nBytes--
+		}
+	}
+	return nBytes == 0
 }

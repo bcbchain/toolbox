@@ -12,9 +12,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tendermint/go-crypto"
 	"io/ioutil"
 	"strings"
+
+	"github.com/tendermint/go-crypto"
 
 	"github.com/tendermint/tendermint/rpc/core/types"
 )
@@ -307,6 +308,63 @@ func Nonce(address types.Address, name, password, chainID, keyStorePath string) 
 	return
 }
 
+// All info of contract
+func ContractInfo(chainID, orgID, contractName string) (contracts map[string]std.Contract, err error) {
+
+	defer FuncRecover(&err)
+
+	ContractList := new(std.ContractVersionList)
+
+	addrS := nodeAddrSlice(chainID)
+
+	err = DoHttpQueryAndParse(addrS, std.KeyOfContractsWithName(orgID, contractName), &ContractList)
+
+	contracts = make(map[string]std.Contract)
+	for k, v := range ContractList.ContractAddrList {
+
+		contract := new(std.Contract)
+
+		err = DoHttpQueryAndParse(addrS, std.KeyOfContract(v), &contract)
+
+		contracts[contractName+string(k)] = *contract
+	}
+	return
+}
+
+// Query contract information with address
+func ContractInfoWithAddr(chainID, contractAddr string) (contract *std.Contract, err error) {
+
+	addrS := nodeAddrSlice(chainID)
+
+	err = DoHttpQueryAndParse(addrS, std.KeyOfContract(contractAddr), &contract)
+
+	return
+}
+
+// Query all contract information
+func AllContractInfo(chainID string) (ContractAddrList []string, err error) {
+
+	ContractAddrList = make([]string, 0)
+
+	addrS := nodeAddrSlice(chainID)
+
+	err = DoHttpQueryAndParse(addrS, std.KeyOfAllContracts(), &ContractAddrList)
+
+	return
+}
+
+// Query organization information
+func QueryOrgInfo(orgID, chainID string) (OrgInfo *std.Organization, err error) {
+
+	addrS := nodeAddrSlice(chainID)
+
+	OrgInfo = new(std.Organization)
+
+	err = DoHttpQueryAndParse(addrS, std.GetOrganizaitionInfo(orgID), &OrgInfo)
+
+	return
+}
+
 // CommitTx commit transaction information
 func CommitTx(chainID, tx string) (commit *CommitTxResult, err error) {
 
@@ -348,7 +406,6 @@ func Version() (result *VersionResult, err error) {
 	var version []byte
 	version, err = ioutil.ReadFile("./version")
 	if err != nil {
-		common.GetLogger().Error("Read version file error", "error", err)
 		err = nil
 		result.Version = "0.0.0.0"
 		return
@@ -374,12 +431,6 @@ func blockResults(chainID string, height int64) (blkResults *core_types.ResultBl
 
 func message(chainID string, message types.Message) (msg Message, err error) {
 
-	//var methodInfo MethodInfo
-	//for i := 0; i < len(message.Items); i++ {
-	//	if err = rlp.DecodeBytes(message.Items[i], &methodInfo); err != nil {
-	//		return
-	//	}
-	//}
 	methodID := fmt.Sprintf("%x", message.MethodID)
 
 	msg.SmcAddress = message.Contract

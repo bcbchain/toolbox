@@ -5,6 +5,7 @@ import (
 	"blockchain/smcsdk/sdk/types"
 	"blockchain/smcsdk/sdkimpl/object"
 	"blockchain/smcsdk/sdkimpl/sdkhelper"
+	"common/jsoniter"
 	myplayerbook3 "contract/orgteststub/stub/myplayerbook"
 	types2 "contract/stubcommon/types"
 
@@ -12,19 +13,19 @@ import (
 	myplayerbookv2 "contract/orgteststub/code/myplayerbook/v2.0/myplayerbook"
 )
 
-//InterfaceMyPlayerbookStub interface stub of playerbook
-type InterfaceMyPlayerbookStub struct {
+//InterfaceStub interface stub of playerbook
+type InterfaceStub struct {
 	stub types2.IContractIntfcStub
 }
 
 const importContractName = "myplayerbook"
 
-func (s *MyCrossmc) myplayerbookStub() *InterfaceMyPlayerbookStub {
-	return &InterfaceMyPlayerbookStub{myplayerbook3.NewInterfaceStub(s.GetSdk(), importContractName)}
+func (s *MyCrossmc) myplayerbookStub() *InterfaceStub {
+	return &InterfaceStub{myplayerbook3.NewInterfaceStub(s.GetSdk(), importContractName)}
 }
 
 //RegisterName register name by calling playerbook contract
-func (intfc *InterfaceMyPlayerbookStub) RegisterName(index int64, plyr player) {
+func (intfc *InterfaceStub) RegisterName(index int64, plyr Player) {
 
 	methodID := "e463fdb2" // prototype: RegisterName(string)(types.Error)
 	oldSmc := intfc.stub.GetSdk()
@@ -37,12 +38,23 @@ func (intfc *InterfaceMyPlayerbookStub) RegisterName(index int64, plyr player) {
 	//TODO 编译时builder从数据库已获取合约版本和失效高度，直接使用
 	height := newSmc.Block().Height()
 	var rn interface{}
+
+	var ply myplayerbookv2.Player
+	resBytes, err := jsoniter.Marshal(plyr)
+	if err != nil {
+		panic(err)
+	}
+	err = jsoniter.Unmarshal(resBytes, &ply)
+	if err != nil {
+		panic(err)
+	}
+
 	if height < 1000 {
 		panic("Invalid parameter") // if parameters are not matched to specified version, panic
 	} else {
 		rn = myplayerbookv2.RegisterNameParam{
 			Index: index,
-			Plyr:  myplayerbookv2.Player{Address: plyr.Address, Name: plyr.Name},
+			Plyr:  ply,
 		}
 	}
 
@@ -55,7 +67,7 @@ func (intfc *InterfaceMyPlayerbookStub) RegisterName(index int64, plyr player) {
 }
 
 //GetPlayer get player information by calling playerbook contract
-func (intfc *InterfaceMyPlayerbookStub) GetPlayer(addr types.Address) string {
+func (intfc *InterfaceStub) GetPlayer(addr types.Address) string {
 	methodID := "f94d817e" // prototype: GetPlayer(types.Address)*Player
 
 	oldSmc := intfc.stub.GetSdk()
@@ -87,7 +99,7 @@ func (intfc *InterfaceMyPlayerbookStub) GetPlayer(addr types.Address) string {
 }
 
 //MultiTypeParam test func
-func (intfc *InterfaceMyPlayerbookStub) MultiTypeParam(index uint64, flt float64, bl bool, bt byte, hash types.Hash, hb types.HexBytes, bi bn.Number, mp map[int]string) {
+func (intfc *InterfaceStub) MultiTypeParam(index uint64, flt float64, bl bool, bt byte, hash types.Hash, hb types.HexBytes, bi bn.Number, mp map[int]string) {
 
 	methodID := "cccccccc" // prototype: RegisterName(string)(types.Error)
 	oldSmc := intfc.stub.GetSdk()
@@ -113,11 +125,11 @@ func (intfc *InterfaceMyPlayerbookStub) MultiTypeParam(index uint64, flt float64
 			Bi:    bi,
 			Mp:    mp,
 		}
-		response := intfc.stub.Invoke(methodID, rn)
-		if response.Code != types.CodeOK {
-			panic(response.Log)
-		}
-		oldmsg := oldSmc.Message()
-		oldmsg.(*object.Message).AppendOutput(intfc.stub.GetSdk().Message().(*object.Message).OutputReceipts())
 	}
+	response := intfc.stub.Invoke(methodID, rn)
+	if response.Code != types.CodeOK {
+		panic(response.Log)
+	}
+	oldmsg := oldSmc.Message()
+	oldmsg.(*object.Message).AppendOutput(intfc.stub.GetSdk().Message().(*object.Message).OutputReceipts())
 }

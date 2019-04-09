@@ -75,8 +75,10 @@ var (
 	to    string
 	value string
 
-	pubKeys  string
-	deployer types.Address
+	pubKeys      string
+	deployer     types.Address
+	orgID        string
+	contractAddr types.Address
 )
 
 func Execute() error {
@@ -207,25 +209,25 @@ var registerOrgCmd = &cobra.Command{
 	},
 }
 
-// set organization's signers
-var setSignersCmd = &cobra.Command{
-	Use:   "setSigners",
+// setOrgSigners set organization's signers
+var setOrgSignersCmd = &cobra.Command{
+	Use:   "setOrgSigners",
 	Short: "Set organization's signers",
 	Long:  "Set organization's signers",
 	Args:  cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return setSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePath, chainID)
+		return setOrgSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePath, chainID)
 	},
 }
 
-// authorize deploy smart contract account
-var authorizeCmd = &cobra.Command{
-	Use:   "authorize",
+// setOrgDeployer deploy smart contract account
+var setOrgDeployerCmd = &cobra.Command{
+	Use:   "setOrgDeployer",
 	Short: "Authorize deploy smart contract account",
 	Long:  "Authorize deploy smart contract account",
 	Args:  cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return authorize(name, password, orgName, deployer, gasLimit, note, keyStorePath, chainID)
+		return setOrgDeployer(name, password, orgName, deployer, gasLimit, note, keyStorePath, chainID)
 	},
 }
 
@@ -251,6 +253,17 @@ var runAsRPCServiceCmd = &cobra.Command{
 	},
 }
 
+// query contract info
+var contractInfoCmd = &cobra.Command{
+	Use:   "contractInfo",
+	Short: "Query contract information",
+	Long:  "Query contract information",
+	Args:  cobra.ExactArgs(0),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return ContractInfo(orgName, contractName, orgID, contractAddr)
+	},
+}
+
 func callCmdFlags() {
 	callCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
 	callCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
@@ -261,21 +274,21 @@ func callCmdFlags() {
 	callCmd.PersistentFlags().StringVarP(&paramsFile, "paramsFile", "f", "", "parameters in file if it too long")
 	callCmd.PersistentFlags().StringVarP(&splitBy, "splitBy", "s", "@", "char that split params")
 	callCmd.PersistentFlags().StringVarP(&pay, "pay", "y", "", "pay token with value before invoke method")
-	callCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
-	callCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "the note for tx")
-	callCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "the chainid define blockchain for this invoke")
+	callCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "gas limit for now transaction")
+	callCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note for tx")
+	callCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 	callCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "the path with load account")
 }
 func blockHeightCmdFlags() {
-	blockHeightCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "the chainid define blockchain for this invoke")
+	blockHeightCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 }
 func blockCmdFlags() {
 	blockCmd.PersistentFlags().StringVarP(&height, "height", "t", "", "height of blockchain")
-	blockCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "the chainid define blockchain for this invoke")
+	blockCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 }
 func transactionCmdFlags() {
 	transactionCmd.PersistentFlags().StringVarP(&txHash, "txhash", "t", "", "hash of transaction")
-	transactionCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "the chainid define blockchain for this invoke")
+	transactionCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 }
 func balanceCmdFlags() {
 	balanceCmd.PersistentFlags().StringVarP(&accAddress, "accAddress", "a", "", "address of account")
@@ -302,13 +315,13 @@ func versionCmdFlags() {
 func deployContractFlags() {
 	deployContractCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
 	deployContractCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
-	deployContractCmd.PersistentFlags().StringVarP(&contractName, "contractName", "t", "", "the name of contract for deploy")
-	deployContractCmd.PersistentFlags().StringVarP(&version, "version", "v", "", "the version for contract")
+	deployContractCmd.PersistentFlags().StringVarP(&contractName, "contractName", "t", "", "name of contract for deploy")
+	deployContractCmd.PersistentFlags().StringVarP(&version, "version", "v", "", "version for contract")
 	deployContractCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "tge name for organization")
-	deployContractCmd.PersistentFlags().StringVarP(&codeFile, "codeFile", "f", "", "the path of contract code file")
-	deployContractCmd.PersistentFlags().StringVarP(&effectHeight, "effectHeight", "i", "", "the height for effect this version contract")
+	deployContractCmd.PersistentFlags().StringVarP(&codeFile, "codeFile", "f", "", "path of contract code file")
+	deployContractCmd.PersistentFlags().StringVarP(&effectHeight, "effectHeight", "i", "", "height for effect this version contract")
 	deployContractCmd.PersistentFlags().StringVarP(&owner, "owner", "r", "", "address of owner for contract")
-	deployContractCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
+	deployContractCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "gas limit for now transaction")
 	deployContractCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
 	deployContractCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 	deployContractCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
@@ -322,7 +335,7 @@ func registerTokenFlags() {
 	registerTokenCmd.PersistentFlags().StringVarP(&addSupplyEnabled, "addSupplyEnabled", "a", "", "add supply enabled of token")
 	registerTokenCmd.PersistentFlags().StringVarP(&burnEnabled, "burnEnabled", "b", "", "burn enabled of token")
 	registerTokenCmd.PersistentFlags().StringVarP(&gasPrice, "gasPrice", "i", "", "gas price of token")
-	registerTokenCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
+	registerTokenCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "gas limit for now transaction")
 	registerTokenCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
 	registerTokenCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 	registerTokenCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
@@ -331,30 +344,30 @@ func registerOrgFlags() {
 	registerOrgCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
 	registerOrgCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
 	registerOrgCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "organization name")
-	registerOrgCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
+	registerOrgCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "gas limit for now transaction")
 	registerOrgCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
 	registerOrgCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 	registerOrgCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
 }
-func setSignersFlags() {
-	setSignersCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
-	setSignersCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
-	setSignersCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "organization name")
-	setSignersCmd.PersistentFlags().StringVarP(&pubKeys, "pubKeys", "s", "", "signer's pubKey")
-	setSignersCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
-	setSignersCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
-	setSignersCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
-	setSignersCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
+func setOrgSignersFlags() {
+	setOrgSignersCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
+	setOrgSignersCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
+	setOrgSignersCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "organization name")
+	setOrgSignersCmd.PersistentFlags().StringVarP(&pubKeys, "pubKeys", "s", "", "signer's pubKey")
+	setOrgSignersCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "gas limit for now transaction")
+	setOrgSignersCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
+	setOrgSignersCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
+	setOrgSignersCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
 }
-func authorizeFlags() {
-	authorizeCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
-	authorizeCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
-	authorizeCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "organization name")
-	authorizeCmd.PersistentFlags().StringVarP(&deployer, "deployer", "d", "", "deployer's address")
-	authorizeCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
-	authorizeCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
-	authorizeCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
-	authorizeCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
+func setOrgDeployerFlags() {
+	setOrgDeployerCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
+	setOrgDeployerCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
+	setOrgDeployerCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "organization name")
+	setOrgDeployerCmd.PersistentFlags().StringVarP(&deployer, "deployer", "d", "", "deployer's address")
+	setOrgDeployerCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "gas limit for now transaction")
+	setOrgDeployerCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
+	setOrgDeployerCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
+	setOrgDeployerCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
 }
 func transferFlags() {
 	transferCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
@@ -362,14 +375,19 @@ func transferFlags() {
 	transferCmd.PersistentFlags().StringVarP(&tokenName, "token", "t", "", "token name of transfer")
 	transferCmd.PersistentFlags().StringVarP(&to, "to", "o", "", "address of transfer")
 	transferCmd.PersistentFlags().StringVarP(&value, "value", "v", "", "value of transfer")
-	transferCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "the gas limit for now transaction")
+	transferCmd.PersistentFlags().StringVarP(&gasLimit, "gasLimit", "g", "", "gas limit for now transaction")
 	transferCmd.PersistentFlags().StringVarP(&note, "note", "e", "", "note of transaction")
 	transferCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 	transferCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", ".keystore", "path of keystore")
 }
 func runAsRpcServiceFlags() {
 }
-
+func contractInfoFlags() {
+	contractInfoCmd.PersistentFlags().StringVarP(&orgName, "orgName", "o", "", "organization name")
+	contractInfoCmd.PersistentFlags().StringVarP(&contractName, "contractName", "t", "", "name of contract for deploy")
+	contractInfoCmd.PersistentFlags().StringVarP(&orgID, "orgID", "i", "", "organization ID")
+	contractInfoCmd.PersistentFlags().StringVarP(&contractAddr, "contractAddr", "a", "", "address of contract")
+}
 func addFlags() {
 	callCmdFlags()
 	blockHeightCmdFlags()
@@ -380,12 +398,13 @@ func addFlags() {
 	commitTxCmdFlags()
 	versionCmdFlags()
 	registerOrgFlags()
-	setSignersFlags()
-	authorizeFlags()
+	setOrgSignersFlags()
+	setOrgDeployerFlags()
 	deployContractFlags()
 	registerTokenFlags()
 	transferFlags()
 	runAsRpcServiceFlags()
+	contractInfoFlags()
 }
 
 func addCommand() {
@@ -399,11 +418,12 @@ func addCommand() {
 	RootCmd.AddCommand(versionCmd)
 	RootCmd.AddCommand(deployContractCmd)
 	RootCmd.AddCommand(registerOrgCmd)
-	RootCmd.AddCommand(setSignersCmd)
-	RootCmd.AddCommand(authorizeCmd)
+	RootCmd.AddCommand(setOrgSignersCmd)
+	RootCmd.AddCommand(setOrgDeployerCmd)
 	RootCmd.AddCommand(registerTokenCmd)
 	RootCmd.AddCommand(transferCmd)
 	RootCmd.AddCommand(runAsRPCServiceCmd)
+	RootCmd.AddCommand(contractInfoCmd)
 }
 
 func Error(s string) {

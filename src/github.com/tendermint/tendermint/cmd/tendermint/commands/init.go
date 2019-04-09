@@ -141,20 +141,19 @@ func initFiles(cmd *cobra.Command, args []string) {
 	}
 
 	// copy files to config dir
-	chainName := nodeListFilename[:len(nodeListFilename)-11]
 	genPath := config.GenesisFile()
 
-	err = types.CopyFile(chainName+"-genesis.json", genPath)
+	err = types.CopyFile(genesisPath+"/"+chainID+"-genesis.json", genPath)
 	if err != nil {
 		fmt.Printf("copy file err: %s\n", err)
 		return
 	}
-	err = types.CopyFile(chainName+"-genesis.json.sig", genPath[:len(genPath)-5]+"-signature.json")
+	err = types.CopyFile(genesisPath+"/"+chainID+"-genesis.json.sig", genPath[:len(genPath)-5]+"-signature.json")
 	if err != nil {
 		fmt.Printf("copy file err: %s\n", err)
 		return
 	}
-	err = types.CopyFile(chainName+"-validators.json", config.ValidatorsFile())
+	err = types.CopyFile(genesisPath+"/"+chainID+"-validators.json", config.ValidatorsFile())
 	if err != nil {
 		fmt.Printf("copy file err: %s\n", err)
 		return

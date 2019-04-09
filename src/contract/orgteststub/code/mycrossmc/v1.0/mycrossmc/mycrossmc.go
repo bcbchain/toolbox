@@ -20,15 +20,15 @@ type MyCrossmc struct {
 	storedData uint64
 }
 
-//@:import:myplayerbook
-type player struct {
+type Player struct {
 	Address types.Address
 	Name    string
 }
 
 //nolint unused
+//@:import:myplayerbook
 type myplayerbook interface {
-	RegisterName(index int64, plyr player)
+	RegisterName(index int64, plyr Player)
 	GetPlayer(addr types.Address) string
 	MultiTypesParam(index uint64, flt float64, bl bool, bt byte, hash types.Hash, hb types.HexBytes, bi bn.Number, mp map[int]string)
 }
@@ -44,7 +44,7 @@ func (ms *MyCrossmc) Register(data uint64) {
 	_to := ms.sdk.Helper().ContractHelper().ContractOfName(importContractName).Account()
 	_from := ms.sdk.Message().Contract().Account()
 	ms.sdk.Helper().AccountHelper().AccountOf(_from).TransferByName("LOC", _to, bn.N(1000000))
-	plyr := player{
+	plyr := Player{
 		Address: "locNUjCm1i8RcoW2kVTbDw4vKW6jzfMxewJH",
 		Name:    "bob",
 	}

@@ -11,7 +11,7 @@ import (
 
 //MyPlayerBook a demo of players management
 //@:contract:myplayerbook
-//@:version:1.0
+//@:version:2.0
 //@:organization:orgGyRrMVF7ukfHNwaZhgWMTbQAYz7d7RcBh
 //@:author:b37e7627431feb18123b81bcf1f41ffd37efdb90513d48ff2c7f8a0c27a9d06c
 type MyPlayerBook struct {

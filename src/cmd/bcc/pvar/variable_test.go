@@ -9,11 +9,11 @@ import (
 
 func TestCreate(t *testing.T) {
 	typeStrList := "bn.Number,int,uint,bool,byte,[]byte,float64,map[string]uint64,map[bool]map[bn.Number]string,[]string,string"
-	valueStrList := `123333221,-123,1234,true,61,616263,123.456,{"test":123\,"test2":456},{"true":{"123":"test"}},["123"\,"456"],"str\,"\\ing"`
+	valueStrList := `123333221,-123,1234,true,"0x61",0x616263,123.456,{"test":123\,"test2":456},{"true":{"123":"test"}},["123"\,"456"],"str\,"\\ing"`
 
 	splitTypes := strings.Split(typeStrList, ",")
 
-	splitValues, err := SplitValues(valueStrList)
+	splitValues, err := splitValues(valueStrList)
 	if err != nil {
 		t.Error(err)
 		return
@@ -25,7 +25,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	for index, typeStr := range splitTypes {
-		v, err := Create(typeStr, splitValues[index])
+		v, err := create(typeStr, splitValues[index])
 		if err != nil {
 			t.Error(err)
 			return

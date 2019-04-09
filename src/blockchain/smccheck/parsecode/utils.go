@@ -4,6 +4,7 @@ import (
 	"blockchain/smcsdk/sdk/types"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/token"
@@ -74,17 +75,56 @@ func ExpandTypeNoStar(t Field) string {
 }
 
 // ExpandMapFieldKey - write map field key type to string
-func ExpandMapFieldKey(f Field) string {
+func ExpandMapFieldKey(f Field, index int) string {
 	m, ok := f.FieldType.(*ast.MapType)
 	if !ok {
 		return ""
 	}
+
+	vF := Field{FieldType: m.Value}
+	str := ExpandMapFieldKey(vF, index+1)
+
 	var buf bytes.Buffer
 	fSet := token.NewFileSet()
 	if err := format.Node(&buf, fSet, m.Key); err != nil {
 		return ""
 	}
-	return buf.String()
+
+	if len(str) > 0 {
+		return fmt.Sprintf("k%d %s, %s", index, buf.String(), str)
+	} else {
+		return fmt.Sprintf("k%d %s", index, buf.String())
+	}
+}
+
+// ExpandMapFieldKeyToKey - write map field key make to string as access key
+func ExpandMapFieldKeyToKey(f Field, index int) string {
+	str := expandMapFieldKeyToKey(f, index)
+
+	strSplit := strings.Split(str, ",")
+	fmtStr := ""
+	for range strSplit {
+		fmtStr += "/%v"
+	}
+	fmtStr += "\", "
+
+	return fmtStr + str
+}
+
+func expandMapFieldKeyToKey(f Field, index int) string {
+	m, ok := f.FieldType.(*ast.MapType)
+	if !ok {
+		return ""
+	}
+
+	vF := Field{FieldType: m.Value}
+	str := expandMapFieldKeyToKey(vF, index+1)
+
+	if len(str) > 0 {
+		return fmt.Sprintf("k%d,%s", index, str)
+	} else {
+		return fmt.Sprintf("k%d", index)
+	}
 }
 
 // ExpandMapFieldVal - write map field val type to string
@@ -92,6 +132,10 @@ func ExpandMapFieldVal(f Field) string {
 	m, ok := f.FieldType.(*ast.MapType)
 	if !ok {
 		return ""
+	}
+
+	if m1, ok := m.Value.(*ast.MapType); ok {
+		m = m1
 	}
 	var buf bytes.Buffer
 	fSet := token.NewFileSet()

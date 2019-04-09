@@ -266,6 +266,10 @@ func execBlockOnProxyApp(logger log.Logger, proxyAppConn proxy.AppConnConsensus,
 		logger.Info("Updates to validators", "updates", abci.ValidatorsString(valUpdates))
 	}
 
+	if abciResponses.EndBlock.ChainVersion != 0 {
+		logger.Info("Upgrade chain version", "chainVersion", abciResponses.EndBlock.ChainVersion)
+	}
+
 	return abciResponses, nil
 }
 
@@ -348,6 +352,11 @@ func updateState(s State, blockID types.BlockID, header *types.Header,
 		lastHeightParamsChanged = header.Height + 1
 	}
 
+	chainVersion := s.ChainVersion
+	if abciResponses.EndBlock.ChainVersion > s.ChainVersion {
+		chainVersion = abciResponses.EndBlock.ChainVersion
+	}
+
 	// NOTE: the AppHash has not been populated.
 	// It will be filled on state.Save.
 	return State{
@@ -363,6 +372,7 @@ func updateState(s State, blockID types.BlockID, header *types.Header,
 		LastHeightConsensusParamsChanged: lastHeightParamsChanged,
 		LastResultsHash:                  abciResponses.ResultsHash(),
 		LastAppHash:                      nil,
+		ChainVersion:                     chainVersion,
 	}, nil
 }
 

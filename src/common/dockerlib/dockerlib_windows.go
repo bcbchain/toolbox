@@ -2,6 +2,7 @@ package dockerlib
 
 import (
 	"bytes"
+	"errors"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -36,7 +37,7 @@ func (l *DockerLib) GetDockerHubIP() string {
 }
 
 // Run 運行 Docker 容器，執行某個功能
-func (l *DockerLib) Run(dockerImageName, containerName string, params *DockerRunParams) bool {
+func (l *DockerLib) Run(dockerImageName, containerName string, params *DockerRunParams) (bool, error) {
 	if l.containers == nil {
 		l.containers = make(map[string]container)
 	}
@@ -67,9 +68,9 @@ func (l *DockerLib) Run(dockerImageName, containerName string, params *DockerRun
 		err := cmd.Run()
 		params.FirstOutput = out.String()
 		if err != nil {
-			return false
+			return false, err
 		}
-		return true
+		return true, nil
 	}
 	go func() {
 		err := cmd.Start()
@@ -95,7 +96,7 @@ func (l *DockerLib) Run(dockerImageName, containerName string, params *DockerRun
 		n := time.Now()
 		sub := n.Sub(beginTime).Seconds()
 		if sub > timeOut {
-			return false
+			return false, errors.New("can not run file " + containerName)
 		}
 		continue
 	}
@@ -104,7 +105,7 @@ func (l *DockerLib) Run(dockerImageName, containerName string, params *DockerRun
 		params.FirstOutput = out.String()
 	}
 
-	return true
+	return true, nil
 }
 
 // Kill 殺死一個 Docker 容器，並且清理現場

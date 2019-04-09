@@ -27,9 +27,6 @@ func RegisterOrg(name, password string, bccParams RegisterOrgParam) (result *Com
 	contractName := "organization"
 	_, keyStorePath, chainID := prepare("", bccParams.KeyStorePath, bccParams.ChainID)
 
-	// require not empty
-	requireNotEmpty("orgName", bccParams.OrgName)
-
 	values := make([]interface{}, 0)
 	values = append(values, bccParams.OrgName)
 
@@ -63,7 +60,7 @@ func RegisterOrg(name, password string, bccParams RegisterOrgParam) (result *Com
 	return
 }
 
-func SetSigners(name, password string, bccParams SetSignersParam) (result *CommitTxResult, err error) {
+func SetOrgSigners(name, password string, bccParams SetOrgSignersParam) (result *CommitTxResult, err error) {
 
 	defer FuncRecover(&err)
 
@@ -116,7 +113,7 @@ func SetSigners(name, password string, bccParams SetSignersParam) (result *Commi
 	return
 }
 
-func Authorize(name, password string, bccParams AuthorizeParam) (result *CommitTxResult, err error) {
+func SetOrgDeployer(name, password string, bccParams SetOrgDeployerParam) (result *CommitTxResult, err error) {
 
 	defer FuncRecover(&err)
 
@@ -290,12 +287,15 @@ func RegisterToken(name, password string, bccParams RegisterTokenParam) (result 
 }
 
 func Transfer(name, password string, bccParams TransferParam) (result *CommitTxResult, err error) {
+	defer FuncRecover(&err)
 
 	_, keyStorePath, chainID := prepare("", bccParams.KeyStorePath, bccParams.ChainID)
 
 	// require not empty
 	requireNotEmpty("token", bccParams.Token)
 	requireNotEmpty("value", bccParams.Value)
+	requireNotEmpty("password", password)
+	requireNotEmpty("gasLimit", bccParams.GasLimit)
 
 	err = algorithm.CheckAddress(chainID, bccParams.To)
 	if err != nil {
@@ -318,7 +318,7 @@ func Transfer(name, password string, bccParams TransferParam) (result *CommitTxR
 }
 
 func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, chainID string, bNonceErr bool, method uint32) (result *CommitTxResult, err error) {
-
+	defer FuncRecover(&err)
 	nonce, err := getNonce(keyStorePath, chainID, name, password, bNonceErr)
 	if err != nil {
 		return
@@ -351,6 +351,7 @@ func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, ch
 
 func packAndCommitTx(name, password, contractName, gasLimit, note, keyStorePath, chainID string,
 	bNonceErr, bSmcErr bool, methodID uint32, values []interface{}) (result *CommitTxResult, err error) {
+	defer FuncRecover(&err)
 
 	nonce, err := getNonce(keyStorePath, chainID, name, password, bNonceErr)
 	if err != nil {

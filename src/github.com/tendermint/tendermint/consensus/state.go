@@ -80,6 +80,7 @@ type ConsensusState struct {
 	evpool     types.EvidencePool
 
 	// internal state
+
 	mtx sync.Mutex
 	cstypes.RoundState
 	state sm.State // State until height-1.
@@ -111,6 +112,13 @@ type ConsensusState struct {
 	// closed when we finish shutting down
 	done chan struct{}
 }
+
+// 为避免ConsensusState的全局锁被锁住导致获取Status的请求无法及时返回，
+// 增加一个全局state变量和独立的锁。
+var (
+	stateMtx  sync.Mutex
+	stateCopy sm.State
+)
 
 // NewConsensusState returns a new ConsensusState.
 func NewConsensusState(config *cfg.ConsensusConfig, state sm.State, blockExec *sm.BlockExecutor, blockStore types.BlockStore, mempool types.Mempool, evpool types.EvidencePool) *ConsensusState {
@@ -187,9 +195,9 @@ func (cs *ConsensusState) GetRoundStateJSON() ([]byte, error) {
 
 // GetValidators returns a copy of the current validators.
 func (cs *ConsensusState) GetValidators() (int64, []*types.Validator) {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
-	return cs.state.LastBlockHeight, cs.state.Validators.Copy().Validators
+	stateMtx.Lock()
+	defer stateMtx.Unlock()
+	return stateCopy.LastBlockHeight, stateCopy.Validators.Validators
 }
 
 // SetPrivValidator sets the private validator account for signing votes.
@@ -489,6 +497,11 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 	cs.LastValidators = state.LastValidators
 
 	cs.state = state
+
+	//For Status RPC call, Get Validators
+	stateMtx.Lock()
+	stateCopy = state.Copy()
+	stateMtx.Unlock()
 
 	// Finally, broadcast RoundState
 	cs.newStep()

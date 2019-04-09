@@ -17,7 +17,7 @@ import (
 const orgGenesis = "orgJgaGConUyK81zibntUBjQ33PKctpk1K1G"
 
 // Gen - walk contract path and generate code
-func Gen(contractDir string) (results []std.GenResult, err types.Error) {
+func Gen(contractDir string, contractInfoList []gen.ContractInfo) (results []std.GenResult, err types.Error) {
 
 	err.ErrorCode = types.CodeOK
 
@@ -66,6 +66,18 @@ func Gen(contractDir string) (results []std.GenResult, err types.Error) {
 			err.ErrorCode = types.ErrInvalidParameter
 			err.ErrorDesc = er.Error()
 			return
+		}
+
+		for _, res := range totalResList {
+			if res.ImportContract != "" {
+				inPath := filepath.Join(filepath.Join(filepath.Join(codePath, res.DirectionName), "v"+res.Version), res.DirectionName)
+				er = gen.GenImport(inPath, res, totalResList, contractInfoList)
+				if er != nil {
+					err.ErrorCode = types.ErrInvalidParameter
+					err.ErrorDesc = er.Error()
+					return
+				}
+			}
 		}
 	}
 

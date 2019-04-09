@@ -78,7 +78,7 @@ func (t *TestContract) testLoseHeight() {
 	fmt.Println("\nTest Case: TestLoseHeight()")
 
 	printTestCase(0, "初始版本合约失效高度为0")
-	AssertEquals(int64(0), t.sdk.Message().Contract().LoseEffect())
+	AssertEquals(int64(0), t.sdk.Message().Contract().LoseHeight())
 	printPass()
 }
 

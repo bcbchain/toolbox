@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/tendermint/go-crypto"
 	cfg "github.com/tendermint/tendermint/config"
+	"strconv"
 	"time"
 
 	abci "github.com/tendermint/abci/types"
@@ -57,6 +58,9 @@ type State struct {
 	LastAppHash []byte
 
 	LastTxsHashList [][]byte
+
+	// add 26 Mar. 2019
+	ChainVersion int64
 }
 
 // Copy makes a copy of the State for mutating.
@@ -82,6 +86,7 @@ func (s State) Copy() State {
 		LastTxsHashList: s.LastTxsHashList,
 
 		LastResultsHash: s.LastResultsHash,
+		ChainVersion:    s.ChainVersion,
 	}
 }
 
@@ -115,7 +120,7 @@ func (s State) MakeBlock(height int64, txs []types.Tx, commit *types.Commit, pro
 	// build base block
 	//block := types.MakeBlock(height, txs, commit)
 
-	block := types.GIMakeBlock(height, txs, commit, s.LastTxsHashList, proposer, s.LastFee, rewardAddr, allocation)
+	block := types.GIMakeBlock(height, txs, commit, s.LastTxsHashList, proposer, s.LastFee, rewardAddr, allocation, s.ChainVersion)
 
 	// fill header with state data
 	block.ChainID = s.ChainID
@@ -179,9 +184,18 @@ func MakeGenesisState(genDoc *types.GenesisDoc) (State, error) {
 		}
 	}
 
+	chainVersion := int64(0)
+	if len(genDoc.ChainVersion) != 0 {
+		chainVersion, err = strconv.ParseInt(genDoc.ChainVersion, 10, 64)
+		if err != nil {
+			return State{}, fmt.Errorf("Invalid chain_version=%s ", genDoc.ChainVersion)
+		}
+	}
+
 	return State{
 
-		ChainID: genDoc.ChainID,
+		ChainID:      genDoc.ChainID,
+		ChainVersion: chainVersion,
 
 		LastBlockHeight: 0,
 		LastBlockID:     types.BlockID{},

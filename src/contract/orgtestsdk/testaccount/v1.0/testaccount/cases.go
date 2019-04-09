@@ -35,7 +35,7 @@ func (t *TestAccount) transferTestTransferValue(byType string) {
 	}{
 		{sender, acct, func() bn.Number { return bn.N(-1E10) }, "转出 -1E10cong", types.ErrInvalidParameter, "Value cannot be negative"},
 		{sender, acct, func() bn.Number { return bn.N(-1) }, "转出 -1cong", types.ErrInvalidParameter, "Value cannot be negative"},
-		{sender, acct, func() bn.Number { return bn.N(0) }, "转出 0cong", types.CodeOK, ""},
+		{sender, acct, func() bn.Number { return bn.N(0) }, "转出 0cong", types.ErrInvalidParameter, "Value cannot be negative"},
 		{sender, acct, func() bn.Number { return bn.N(1) }, "转出 1cong", types.CodeOK, ""},
 		{sender, acct, func() bn.Number { return bn.N(2) }, "转出 2cong", types.CodeOK, ""},
 		{sender, acct, func() bn.Number { return sender.Balance().SubI(1) }, "剩余1cong", types.CodeOK, ""},
@@ -93,7 +93,7 @@ func (t *TestAccount) transferSenderNoAuth(byType string) {
 		errmsg string
 	}{
 		// 拥有者账户为转出账户
-		{recv, acct, func() bn.Number { return bn.N(0) }, "转出 0cong", types.ErrNoAuthorization, "No authorization to execute contract"},
+		{recv, acct, func() bn.Number { return bn.N(0) }, "转出 0cong", types.ErrInvalidParameter, "Value cannot be negative"},
 		{recv, acct, func() bn.Number { return bn.N(1) }, "转出 1cong", types.ErrNoAuthorization, "No authorization to execute contract"},
 		{recv, acct, func() bn.Number { return bn.N(2) }, "转出 2cong", types.ErrNoAuthorization, "No authorization to execute contract"},
 		{recv, acct, func() bn.Number { return recv.Balance().SubI(1) }, "剩余1cong", types.ErrNoAuthorization, "No authorization to execute contract"},
@@ -419,7 +419,6 @@ func (t *TestAccount) testAccountBalance(byType string) {
 		errmsg  string
 	}{
 		// 拥有者账户为转出账户
-		{sender, recv, func() bn.Number { return bn.N(0) }, bn.N(0), "转入0cong", types.CodeOK, ""},
 		{sender, recv, func() bn.Number { return bn.N(1) }, bn.N(1), "转入1cong", types.CodeOK, ""},
 		{sender, recv, func() bn.Number { return bn.N(2) }, bn.N(3), "转入2cong", types.CodeOK, ""},
 		{sender, recv, func() bn.Number { return bn.N(1E9) }, bn.N(1E9 + 3), "转入1E9cong", types.CodeOK, ""},

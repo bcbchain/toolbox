@@ -70,7 +70,9 @@ type Result struct {
 	IsExistUpdateChain bool
 	Functions          []Function
 
-	Receipts []Method
+	Receipts         []Method
+	ImportContract   string
+	ImportInterfaces []Method
 
 	UserStruct map[string]ast.GenDecl
 
@@ -90,21 +92,23 @@ func newVisitor() visitor {
 	errPos := make([]token.Pos, 0)
 	funcs := make([]Function, 0)
 	receipts := make([]Method, 0)
+	importInterfaces := make([]Method, 0)
 	stores := make([]Field, 0)
 	caches := make([]Field, 0)
 	imp := make(map[Import]struct{})
 	aImp := make(map[Import]struct{})
 	us := make(map[string]ast.GenDecl)
 	res := Result{
-		Imports:     imp,
-		AllImports:  aImp,
-		Functions:   funcs,
-		Receipts:    receipts,
-		Stores:      stores,
-		StoreCaches: caches,
-		UserStruct:  us,
-		ErrorDesc:   errDesc,
-		ErrorPos:    errPos,
+		Imports:          imp,
+		AllImports:       aImp,
+		Functions:        funcs,
+		Receipts:         receipts,
+		ImportInterfaces: importInterfaces,
+		Stores:           stores,
+		StoreCaches:      caches,
+		UserStruct:       us,
+		ErrorDesc:        errDesc,
+		ErrorPos:         errPos,
 	}
 	depth := 0
 	return visitor{
@@ -383,6 +387,7 @@ func (v *visitor) parseStructsNInterface(d *ast.GenDecl) {
 			if v.depth == 1 && d.Doc != nil {
 				if _, ok := typ.Type.(*ast.InterfaceType); ok {
 					v.parseInterface(d, typ)
+					v.parseImportInterface(d, typ)
 				}
 				if _, ok := typ.Type.(*ast.StructType); ok {
 					v.parseStructs(d, typ)
@@ -430,6 +435,46 @@ func (v *visitor) isReceipt(d *ast.GenDecl) bool {
 		}
 	}
 	return false
+}
+
+// parse import interface annotation (import)
+func (v *visitor) parseImportInterface(d *ast.GenDecl, typ *ast.TypeSpec) {
+	// fmt.Println("INTERFACE::: name(", typ.Name, ") =>[[", d.Doc.Text(), "]]")
+	isImport, importContract := v.isImport(d)
+	if isImport {
+		v.res.ImportContract = importContract
+		it, _ := typ.Type.(*ast.InterfaceType)
+		for _, am := range it.Methods.List {
+			if m, ok := am.Type.(*ast.FuncType); ok {
+				params := make([]Field, 0)
+				for _, p := range m.Params.List {
+					params = append(params, v.parseField(p))
+				}
+				results := make([]Field, 0)
+				if m.Results != nil {
+					for _, r := range m.Results.List {
+						results = append(results, v.parseField(r))
+					}
+				}
+				v.res.ImportInterfaces = append(v.res.ImportInterfaces, Method{
+					Name:    am.Names[0].Name,
+					Params:  params,
+					Results: results,
+				})
+			}
+		}
+	}
+}
+
+func (v *visitor) isImport(d *ast.GenDecl) (isImport bool, contractName string) {
+	for _, l := range d.Doc.List {
+		doc := strings.TrimSpace(l.Text)
+		if strings.HasPrefix(strings.ToLower(doc), "//@:import:") {
+			splitTemp := strings.Split(doc, ":")
+			return true, splitTemp[2]
+		}
+	}
+	return false, ""
 }
 
 // parse struct annotation (contract,version,organization,author)

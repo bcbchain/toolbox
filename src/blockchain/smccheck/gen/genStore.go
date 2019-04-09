@@ -22,19 +22,19 @@ var storeTemplate = `package {{.PackageName}}
 {{range $i, $s := .Stores}}
 // {{$s|expNames}} {{$s|expType}}
 //@:public:store{{$isMap := $s | isM}}{{$isLit := $s | isL}}{{$isBnN := $s | isN}}{{$isStar := $s | isS}}
-{{if $isMap}}{{$isMLit := $s|isML}}{{$isMVStar := $s|isMS}}{{if (isNV ($s|expV))}}
-func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}(k {{$s|expK}}) bn.Number {
+{{if $isMap}}{{$isMLit := $s|isML}}{{$isMVStar := $s|isMS}}{{$isVMap := $s|isVM}}{{if (isNV ($s|expV))}}
+func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}({{expK $s 0}}) bn.Number {
 	temp := bn.N(0)
-	return *{{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx(fmt.Sprintf("/{{$s|expNames}}/%v", k), &temp).(*bn.Number)
+	return *{{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}), &temp).(*bn.Number)
 }{{else}}
-func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}(k {{$s|expK}}) {{$s|expV}} {
-	return {{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx(fmt.Sprintf("/{{$s|expNames}}/%v", k), {{if $isMLit}}new({{$s|expVNoS}}){{else}}&{{$s|expVNoS}}{}{{end}}).({{$s|expV}})
+func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}({{expK $s 0}}) {{$s|expV}} {
+	return {{mp $s}}{{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}), {{md $s}}).({{mr $s}})
 }{{end}}
-func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$s|expNames|upperFirst}}(k {{$s|expK}}, v {{$s|expV}}) {
-	{{$.ReceiverName}}.sdk.Helper().StateHelper().Set(fmt.Sprintf("/{{$s|expNames}}/%v", k), {{if $isMVStar}}v{{else}}&v{{end}})
+func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$s|expNames|upperFirst}}({{expK $s 0}}, v {{$s|expV}}) {
+	{{$.ReceiverName}}.sdk.Helper().StateHelper().Set(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}), {{if $isMVStar}}v{{else}}&v{{end}})
 }
-func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$s|expNames|upperFirst}}(k {{$s|expK}}) bool {
-	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check(fmt.Sprintf("/{{$s|expNames}}/%v", k))
+func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$s|expNames|upperFirst}}({{expK $s 0}}) bool {
+	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}))
 }
 {{else}}{{if $isBnN}}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}() bn.Number {
@@ -42,7 +42,7 @@ func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}() bn.Number {
 	return *{{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx("/{{$s|expNames}}", &temp).(*bn.Number)
 }{{else}}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}() {{$s|expType}} {
-	return {{if not $isStar}}*{{end}}{{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx("/{{$s|expNames}}",{{if $isLit}}new({{$s|expNoS}}){{else}}&{{$s|expNoS}}{}{{end}}).(*{{$s|expNoS}})
+	return {{if not $isStar}}*{{end}}{{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx("/{{$s|expNames}}", {{md $s}}).(*{{$s|expNoS}})
 }{{end}}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$s|expNames|upperFirst}}(v {{$s|expType}}) {
 	{{$.ReceiverName}}.sdk.Helper().StateHelper().Set("/{{$s|expNames}}", {{if $isStar}}v{{else}}&v{{end}})
@@ -56,25 +56,25 @@ func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$s|expNames|upperFirst}}() b
 {{range $i, $c := .Caches}}
 // {{$c|expNames}} {{$c|expType}}
 //@:public:store:cache{{$isLit := $c|isL}}{{$isMap := $c|isM}}{{$isBnN := $c | isN}}{{$isStar := $c | isS}}
-{{if $isMap}}{{$isMLit := $c|isML}}{{$isMVStar := $c|isMS}}
-func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$c|expNames|upperFirst}}(k {{$c|expK}}, v {{$c|expV}}) {
-	{{$.ReceiverName}}.sdk.Helper().StateHelper().McSet(fmt.Sprintf("/{{$c|expNames}}/%v", k), {{if $isMVStar}}v{{else}}&v{{end}})
+{{if $isMap}}{{$isMLit := $c|isML}}{{$isMVStar := $c|isMS}}{{$isVMap := $c|isVM}}
+func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$c|expNames|upperFirst}}({{expK $c 0}}, v {{$c|expV}}) {
+	{{$.ReceiverName}}.sdk.Helper().StateHelper().McSet(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}), {{if $isMVStar}}v{{else}}&v{{end}})
 }{{if (isNV ($c|expV))}}
-func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}(k {{$c|expK}}) bn.Number {
+func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}({{expK $c 0}}) bn.Number {
 	temp := bn.N(0)
-	return *{{$.ReceiverName}}.sdk.Helper().StateHelper().McGetEx(fmt.Sprintf("/{{$c|expNames}}/%v", k), &temp).(*bn.Number)
+	return *{{$.ReceiverName}}.sdk.Helper().StateHelper().McGetEx(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}), &temp).(*bn.Number)
 }{{else}}
-func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}(k {{$c|expK}}) {{$c|expV}} {
-	return *{{$.ReceiverName}}.sdk.Helper().StateHelper().McGetEx(fmt.Sprintf("/{{$c|expNames}}/%v", k), new({{$c|expV}})).(*{{$c|expV}})
+func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}({{expK $c 0}}) {{$c|expV}} {
+	return {{mp $c}}{{$.ReceiverName}}.sdk.Helper().StateHelper().McGetEx(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}), {{md $c}}).({{mr $c}})
 }{{end}}
-func ({{$.ReceiverName}} *{{$.ContractName}}) _clr{{$c|expNames|upperFirst}}(k {{$c|expK}}) {
-	{{$.ReceiverName}}.sdk.Helper().StateHelper().McClear(fmt.Sprintf("/{{$c|expNames}}/%v", k))
+func ({{$.ReceiverName}} *{{$.ContractName}}) _clr{{$c|expNames|upperFirst}}({{expK $c 0}}) {
+	{{$.ReceiverName}}.sdk.Helper().StateHelper().McClear(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}))
 }
-func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$c|expNames|upperFirst}}(k {{$c|expK}}) bool {
-	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check(fmt.Sprintf("/{{$c|expNames}}/%v", k))
+func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$c|expNames|upperFirst}}({{expK $c 0}}) bool {
+	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}))
 }
-func ({{$.ReceiverName}} *{{$.ContractName}}) _McChk{{$c|expNames|upperFirst}}(k {{$c|expK}}) bool {
-	return {{$.ReceiverName}}.sdk.Helper().StateHelper().McCheck(fmt.Sprintf("/{{$c|expNames}}/%v", k))
+func ({{$.ReceiverName}} *{{$.ContractName}}) _McChk{{$c|expNames|upperFirst}}({{expK $c 0}}) bool {
+	return {{$.ReceiverName}}.sdk.Helper().StateHelper().McCheck(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}))
 }
 {{else}}{{if $isBnN}}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}() bn.Number {
@@ -82,7 +82,7 @@ func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}() bn.Number {
 	return *{{$.ReceiverName}}.sdk.Helper().StateHelper().McGetEx("/{{$c|expNames}}", &temp).(*bn.Number)
 } {{else}}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}() {{$c|expType}} {
-	return {{if not $isStar}}*{{end}}{{$.ReceiverName}}.sdk.Helper().StateHelper().McGetEx("/{{$c|expNames}}", {{if $isLit}}new ({{$c|expNoS}}){{else}}&{{$c|expNoS}}{}{{end}}).(*{{$c|expNoS}})
+	return {{if not $isStar}}*{{end}}{{$.ReceiverName}}.sdk.Helper().StateHelper().McGetEx("/{{$c|expNames}}", {{md $c}}).({{mr $c}})
 }{{end}}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$c|expNames|upperFirst}}(v {{$c|expType}}) {
 	{{$.ReceiverName}}.sdk.Helper().StateHelper().McSet("/{{$c|expNames}}", {{if $isStar}}v{{else}}&v{{end}})
@@ -148,6 +148,7 @@ func GenStore(inPath string, res *parsecode.Result) error {
 		"expK":       parsecode.ExpandMapFieldKey,
 		"expV":       parsecode.ExpandMapFieldVal,
 		"expVNoS":    parsecode.ExpandMapFieldValNoStar,
+		"expK2K":     parsecode.ExpandMapFieldKeyToKey,
 		"isM":        isMap,
 		"isS":        isStar,
 		"isMS":       isMapFieldValStar,
@@ -155,6 +156,10 @@ func GenStore(inPath string, res *parsecode.Result) error {
 		"isML":       isMapValLiteral,
 		"isN":        isBnNumber,
 		"isNV":       isBnNumberValue,
+		"isVM":       isMapFieldValMap,
+		"mp":         makePrefixStar,
+		"mr":         makeReturnStr,
+		"md":         makeDefaultValueStr,
 	}
 	tmpl, err := template.New("store").Funcs(funcMap).Parse(storeTemplate)
 	if err != nil {
@@ -268,19 +273,6 @@ func isMapValLiteral(f parsecode.Field) bool {
 		return true
 	}
 	return false
-
-	//if vt, okV := mt.Value.(*ast.Ident); okV {
-	//	if _, ok := parsecode.LiteralTypes[vt.Name]; ok {
-	//		return true
-	//	}
-	//} else if st, okS := mt.Value.(*ast.StarExpr); okS {
-	//	if id, okI := st.X.(*ast.Ident); okI {
-	//		if _, ok := parsecode.LiteralTypes[id.Name]; ok {
-	//			return true
-	//		}
-	//	}
-	//}
-	//return false
 }
 
 func isMapFieldValStar(f parsecode.Field) bool {
@@ -290,4 +282,67 @@ func isMapFieldValStar(f parsecode.Field) bool {
 	}
 	_, okStar := m.Value.(*ast.StarExpr)
 	return okStar
+}
+
+func isMapFieldValMap(f parsecode.Field) bool {
+	m, ok := f.FieldType.(*ast.MapType)
+	if !ok {
+		return false
+	}
+	_, okMap := m.Value.(*ast.MapType)
+	return okMap
+}
+
+func makeDefaultValueStr(f parsecode.Field) string {
+	if isLiteralType(f) {
+		return "new(" + parsecode.ExpandTypeNoStar(f) + ")"
+	} else if isMap(f) {
+		m, ok := f.FieldType.(*ast.MapType)
+		if !ok {
+			return ""
+		}
+
+		if m1, ok := m.Value.(*ast.MapType); ok {
+			m = m1
+		}
+
+		return makeDefaultValueStr(parsecode.Field{FieldType: m.Value})
+	} else {
+		return "&" + parsecode.ExpandTypeNoStar(f) + "{}"
+	}
+}
+
+func makeReturnStr(f parsecode.Field) string {
+	if isMap(f) {
+		m, ok := f.FieldType.(*ast.MapType)
+		if !ok {
+			return ""
+		}
+
+		if m1, ok := m.Value.(*ast.MapType); ok {
+			m = m1
+		}
+
+		return "*" + parsecode.ExpandTypeNoStar(parsecode.Field{FieldType: m.Value})
+	} else {
+		return "*" + parsecode.ExpandTypeNoStar(f)
+	}
+}
+
+func makePrefixStar(f parsecode.Field) string {
+	m, ok := f.FieldType.(*ast.MapType)
+	if !ok {
+		return ""
+	}
+
+	if m1, ok := m.Value.(*ast.MapType); ok {
+		m = m1
+	}
+
+	resultStr := ""
+	if !isStar(parsecode.Field{FieldType: m.Value}) {
+		resultStr += "*"
+	}
+
+	return resultStr
 }

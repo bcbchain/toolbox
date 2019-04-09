@@ -14,6 +14,7 @@ import (
 	"blockchain/smcsdk/sdk"
 	"contract/stubcommon/common"
 	"contract/stubcommon/types"
+	"fmt"
 	"github.com/tendermint/tmlibs/log"
 
 	{{- range $i,$directionName := $.DirectionNames}}
@@ -23,11 +24,14 @@ import (
 
 func NewStub(smc sdk.ISmartContract, logger log.Logger) types.IContractStub {
 
+	logger.Debug(fmt.Sprintf("NewStub error, contract=%s,version=%s", smc.Message().Contract().Name(), smc.Message().Contract().Version()))
 	switch common.CalcKey(smc.Message().Contract().Name(), smc.Message().Contract().Version()) {
-	{{- range $j,$packageName := $.PackageNames}}
-	case "{{$packageName}}{{replace (version $j $.Versions)}}":
-		return {{$packageName}}{{replace (version $j $.Versions)}}.New(logger)
+	{{- range $j,$contractName := $.ContractNames}}
+	case "{{$contractName}}{{replace (version $j $.Versions)}}":
+		return {{getName $j $.PackageNames}}{{replace (version $j $.Versions)}}.New(logger)
 	{{- end}}
+	default:
+		logger.Fatal(fmt.Sprintf("NewStub error, contract=%s,version=%s", smc.Message().Contract().Name(), smc.Message().Contract().Version()))
 	}
 
 	return nil
@@ -37,6 +41,7 @@ func NewStub(smc sdk.ISmartContract, logger log.Logger) types.IContractStub {
 type OrgContracts struct {
 	OrgID          string
 	DirectionNames []string
+	ContractNames  []string
 	PackageNames   []string
 	Versions       []string
 }
@@ -46,12 +51,14 @@ func res2factory(reses []*parsecode.Result) OrgContracts {
 	factory := OrgContracts{
 		OrgID:          reses[0].OrgID,
 		DirectionNames: make([]string, 0),
+		ContractNames:  make([]string, 0),
 		PackageNames:   make([]string, 0),
 		Versions:       make([]string, 0),
 	}
 
 	for _, res := range reses {
 		factory.DirectionNames = append(factory.DirectionNames, res.DirectionName)
+		factory.ContractNames = append(factory.ContractNames, res.ContractName)
 		factory.PackageNames = append(factory.PackageNames, res.PackageName)
 		factory.Versions = append(factory.Versions, res.Version)
 	}

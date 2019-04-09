@@ -47,7 +47,7 @@ func MakeBlock(height int64, txs []Tx, commit *Commit) *Block {
 
 //将上一次交易hashlist存入到下一个block的data中
 func GIMakeBlock(height int64, txs []Tx, commit *Commit, txHashList [][]byte,
-	proposer string, lastFee uint64, rewardAddr string, lastAllocation []types.Allocation) *Block {
+	proposer string, lastFee uint64, rewardAddr string, lastAllocation []types.Allocation, chainVersion int64) *Block {
 
 	block := &Block{
 		Header: &Header{
@@ -58,6 +58,7 @@ func GIMakeBlock(height int64, txs []Tx, commit *Commit, txHashList [][]byte,
 			LastAllocation:  lastAllocation,
 			ProposerAddress: proposer,
 			RewardAddress:   rewardAddr,
+			ChainVersion:    chainVersion,
 		},
 		LastCommit: commit,
 		Data: &Data{
@@ -76,7 +77,6 @@ func GIMakeBlock(height int64, txs []Tx, commit *Commit, txHashList [][]byte,
 	}
 	block.fillHeader()
 	return block
-
 }
 
 // AddEvidence appends the given evidence to the block
@@ -243,8 +243,10 @@ type Header struct {
 
 	// added 06 August 2018
 	RandomOfBlock cmn.HexBytes `json:"random_of_block,omitempty"`
-	// version of block
-	Version string `json:"version"`
+	// version of block - added 14 Dec. 2018
+	Version string `json:"version,omitempty"`
+	// added 26 Mar. 2019
+	ChainVersion int64 `json:"chain_version,omitempty"`
 }
 
 // Hash returns the hash of the header.

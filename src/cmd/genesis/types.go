@@ -46,6 +46,7 @@ type GenesisAppState struct {
 
 type GenesisDoc struct {
 	ChainID         string             `json:"chain_id"`
+	ChainVersion    string             `json:"chain_version"`
 	GenesisTime     time.Time          `json:"genesis_time"`
 	AppHash         string             `json:"app_hash"`
 	ConsensusParams *ConsensusParams   `json:"consensus_params,omitempty"`
