@@ -21,4 +21,4 @@ bcbtest:
 
 # 本地配置
 local:
-  - "http://localhost:37827"
+  - "http://localhost:46657"

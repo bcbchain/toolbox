@@ -411,7 +411,8 @@ func Version() (result *VersionResult, err error) {
 		return
 	}
 	result.Version = string(version)
-
+	result.Version = strings.Replace(result.Version, "\r\n", "", -1)
+	result.Version = strings.Replace(result.Version, "\n", "", -1)
 	return
 }
 
