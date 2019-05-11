@@ -48,6 +48,11 @@ type Function struct {
 	GetTransferToMe bool
 }
 
+type ImportContract struct {
+	Name       string
+	Interfaces []Method
+}
+
 // Result is the parse result
 type Result struct {
 	DirectionName string
@@ -66,13 +71,13 @@ type Result struct {
 	StoreCaches []Field
 
 	InitChain          Function
+	IsExistInitChain   bool
 	UpdateChain        Function
 	IsExistUpdateChain bool
 	Functions          []Function
 
-	Receipts         []Method
-	ImportContract   string
-	ImportInterfaces []Method
+	Receipts        []Method
+	ImportContracts []ImportContract
 
 	UserStruct map[string]ast.GenDecl
 
@@ -92,23 +97,23 @@ func newVisitor() visitor {
 	errPos := make([]token.Pos, 0)
 	funcs := make([]Function, 0)
 	receipts := make([]Method, 0)
-	importInterfaces := make([]Method, 0)
+	importContracts := make([]ImportContract, 0)
 	stores := make([]Field, 0)
 	caches := make([]Field, 0)
 	imp := make(map[Import]struct{})
 	aImp := make(map[Import]struct{})
 	us := make(map[string]ast.GenDecl)
 	res := Result{
-		Imports:          imp,
-		AllImports:       aImp,
-		Functions:        funcs,
-		Receipts:         receipts,
-		ImportInterfaces: importInterfaces,
-		Stores:           stores,
-		StoreCaches:      caches,
-		UserStruct:       us,
-		ErrorDesc:        errDesc,
-		ErrorPos:         errPos,
+		Imports:         imp,
+		AllImports:      aImp,
+		Functions:       funcs,
+		Receipts:        receipts,
+		ImportContracts: importContracts,
+		Stores:          stores,
+		StoreCaches:     caches,
+		UserStruct:      us,
+		ErrorDesc:       errDesc,
+		ErrorPos:        errPos,
 	}
 	depth := 0
 	return visitor{
@@ -208,11 +213,15 @@ func (v *visitor) parseStoreField(d *ast.Field) {
 		list := strings.Split(d.Doc.Text(), "\n")
 		for _, doc := range list {
 			doc = strings.TrimSpace(doc)
-			if strings.HasPrefix(doc, "@:public:store:cache") {
+			if doc == "@:public:store:cache" {
 				// fmt.Println("FIELD::: name(", d.Names, ") =>[[", d.Doc.Text(), "]]")
 				cacheField := v.parseField(d)
+				if IsStarValueInType(cacheField) {
+					v.reportErr("the symbol of cache not support star type", d.Type.Pos())
+				}
+
 				v.res.StoreCaches = append(v.res.StoreCaches, cacheField)
-			} else if strings.HasPrefix(doc, "@:public:store") {
+			} else if doc == "@:public:store" {
 				// fmt.Println("FIELD::: name(", d.Names, ") =>[[", d.Doc.Text(), "]]")
 				storeField := v.parseField(d)
 				v.res.Stores = append(v.res.Stores, storeField)
@@ -226,6 +235,7 @@ func (v *visitor) parseAllFunc(d *ast.FuncDecl) {
 		// fmt.Println("FUNCTION::: name(", d.Name.Name, ") =>[[", d.Doc.Text(), "]]")
 		if v.hasConstructorInComments(d) && d.Name.Name == "InitChain" {
 			v.res.InitChain = v.parseInitChain(d)
+			v.res.IsExistInitChain = true
 		} else if v.hasConstructorInComments(d) && d.Name.Name == "UpdateChain" {
 			v.res.UpdateChain = v.parseUpdateChain(d)
 			v.res.IsExistUpdateChain = true
@@ -313,7 +323,7 @@ func (v *visitor) getGasFromComments(d *ast.FuncDecl, prefix string) int64 {
 			gas := c[len(prefix) : len(c)-1]
 			i, e := strconv.ParseInt(gas, 10, 0)
 			if e != nil {
-				v.reportErr("method gas not a number", d.Pos()) // TODO report error?
+				v.reportErr("method gas not a number", d.Pos())
 			}
 			return i
 		}
@@ -442,7 +452,7 @@ func (v *visitor) parseImportInterface(d *ast.GenDecl, typ *ast.TypeSpec) {
 	// fmt.Println("INTERFACE::: name(", typ.Name, ") =>[[", d.Doc.Text(), "]]")
 	isImport, importContract := v.isImport(d)
 	if isImport {
-		v.res.ImportContract = importContract
+		imCon := ImportContract{Name: importContract, Interfaces: make([]Method, 0)}
 		it, _ := typ.Type.(*ast.InterfaceType)
 		for _, am := range it.Methods.List {
 			if m, ok := am.Type.(*ast.FuncType); ok {
@@ -456,13 +466,14 @@ func (v *visitor) parseImportInterface(d *ast.GenDecl, typ *ast.TypeSpec) {
 						results = append(results, v.parseField(r))
 					}
 				}
-				v.res.ImportInterfaces = append(v.res.ImportInterfaces, Method{
+				imCon.Interfaces = append(imCon.Interfaces, Method{
 					Name:    am.Names[0].Name,
 					Params:  params,
 					Results: results,
 				})
 			}
 		}
+		v.res.ImportContracts = append(v.res.ImportContracts, imCon)
 	}
 }
 

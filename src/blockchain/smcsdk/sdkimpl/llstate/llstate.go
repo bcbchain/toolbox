@@ -65,11 +65,21 @@ func (ll *LowLevelSDB) Get(key string, defaultValue interface{}) interface{} {
 		}
 	}
 
+	if resBytes == nil {
+		sdkimpl.Logger.Debugf("[sdk][transID=%d][txID=%d] Cannot find key=%s in stateDB", ll.transID, ll.txID, key)
+		return nil
+	}
+
 	err := jsoniter.Unmarshal(resBytes, defaultValue)
 	if err != nil {
-		sdkimpl.Logger.Fatalf("[sdk][transID=%d][txID=%d] Cannot unmarshal from key=%s in stateDB, error=%v\nbytes=%v", ll.transID, ll.txID, key, err, resBytes)
-		sdkimpl.Logger.Flush()
-		panic(err)
+		if key == "/genesis/chainid" {
+			temp := string(resBytes)
+			defaultValue = &temp
+		} else {
+			sdkimpl.Logger.Fatalf("[sdk][transID=%d][txID=%d] Cannot unmarshal from key=%s in stateDB, error=%v\nbytes=%v", ll.transID, ll.txID, key, err, resBytes)
+			sdkimpl.Logger.Flush()
+			panic(err)
+		}
 	}
 
 	sdkimpl.Logger.Tracef("[sdk][transID=%d][txID=%d] Get key=%s from stateDB, value=%v", ll.transID, ll.txID, key, defaultValue)
@@ -160,6 +170,12 @@ func (ll *LowLevelSDB) Flush() {
 	sdbSet(ll.transID, ll.txID, ll.cache)
 }
 
+// Delete delete data map by key
+func (ll *LowLevelSDB) Delete(key string) {
+	ll.cache[key] = nil
+}
+
+// data input std.GetResult data, then return value if ok or nil
 func (ll *LowLevelSDB) data(key string, resBytes []byte) []byte {
 	var getResult std.GetResult
 	err := jsoniter.Unmarshal(resBytes, &getResult)

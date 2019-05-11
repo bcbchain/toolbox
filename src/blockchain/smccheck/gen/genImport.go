@@ -4,6 +4,7 @@ import (
 	"blockchain/smccheck/parsecode"
 	"blockchain/smcsdk/sdk/std"
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"path/filepath"
@@ -14,53 +15,61 @@ import (
 var importTemplate = `package {{.PackageName}}
 
 import (
+	"blockchain/smcsdk/sdk"
 	"blockchain/smcsdk/sdk/bn"
 	"blockchain/smcsdk/sdk/types"
+	"blockchain/smcsdk/sdkimpl"
 	"blockchain/smcsdk/sdkimpl/object"
 	"blockchain/smcsdk/sdkimpl/sdkhelper"
 	{{if (isEx $.Contracts $.ImportContract $.ImportInterfaces)}}"common/jsoniter"{{end}}
-	"contract/{{$.OrgID}}/stub/{{$.ImportContract}}"
+	"contract/{{$.OrgID}}/stub/{{$.DirectionName}}"
 	types2 "contract/stubcommon/types"
 
-	{{range $i, $contract := $.Contracts}}{{if eq $contract.Name $.ImportContract}}
-	{{$contract.Name}}v{{vEx $contract.Version}} "contract/{{$.OrgID}}/code/{{$.ImportContract}}/v{{$contract.Version}}/{{$.ImportContract}}"
+	{{range $i, $contract := $.IContracts}}{{if eq $contract.Name $.ImportContract}}
+	{{$contract.Name}}v{{vEx $contract.Version}} "contract/{{$.OrgID}}/code/{{$.DirectionName}}/v{{$contract.Version}}/{{$.DirectionName}}"
 	{{- end}}{{- end}}
 )
 
-//InterfaceStub interface stub of playerbook
-type InterfaceStub struct {
+//InterfaceStub{{$.Index}} interface stub of {{$.ImportContract}}
+type InterfaceStub{{$.Index}} struct {
     stub types2.IContractIntfcStub
 }
 
-const importContractName = "{{$.ImportContract}}"
-
-func (s *{{.ContractStructure}}) {{$.ImportContract}}Stub() *InterfaceStub {
-    return &InterfaceStub{ {{$.ImportContract}}.NewInterfaceStub(s.GetSdk(), importContractName)}
+const importContractName{{$.Index}} = "{{$.ImportContract}}"
+func (s *{{.ContractStructure}}) {{$.ImportContract}}() *InterfaceStub{{$.Index}} {
+    return &InterfaceStub{{$.Index}}{ {{$.ImportPackage}}.NewInterfaceStub(s.GetSdk(), importContractName{{$.Index}})}
 }
 
 {{range $j, $method := $.ImportInterfaces}}
 // {{$method.Name}}
-func (intfc *InterfaceStub) {{$method.Name}}({{range $i0, $param := $method.Params}}{{$param | expNames}} {{$param | expType}}{{if lt $i0 (dec (len $method.Params))}},{{end}}{{end}}) {{if (len $method.Results)}}string{{end}} {
+func (intfc *InterfaceStub{{$.Index}}) {{$method.Name}}({{range $i0, $param := $method.Params}}{{$param | expNames}} {{$param | expType}}{{if lt $i0 (dec (len $method.Params))}},{{end}}{{end}}) {{if (len $method.Results)}}string{{end}} {
 
     methodID := "{{$method | createProto | calcMethodID | printf "%x"}}" // prototype: {{createProto $method}}
     oldSmc := intfc.stub.GetSdk()
     defer intfc.stub.SetSdk(oldSmc)
+	oldmsg := oldSmc.Message()
+	defer oldSmc.(*sdkimpl.SmartContract).SetMessage(oldmsg)
     //合约调用时的输入收据，同时可作为跨合约调用的输入收据
-    contract := oldSmc.Helper().ContractHelper().ContractOfName(importContractName)
+    contract := oldSmc.Helper().ContractHelper().ContractOfName(importContractName{{$.Index}})
+	sdk.Require(contract != nil, types.ErrExpireContract, "")
     newSmc := sdkhelper.OriginNewMessage(oldSmc, contract, methodID, oldSmc.Message().(*object.Message).OutputReceipts())
     intfc.stub.SetSdk(newSmc)
 
-    //TODO 编译时builder从数据库已获取合约版本和失效高度，直接使用
+    // 编译时builder从数据库已获取合约版本和失效高度，直接使用
     height := newSmc.Block().Height()
     var rn interface{}
 	{{createVar $.Contracts $.ImportContract $method}}
 
     response := intfc.stub.Invoke(methodID, rn)
     if response.Code != types.CodeOK {
-        panic(response.Log)
+		err := types.Error{ErrorCode: response.Code, ErrorDesc: response.Log}
+        panic(err)
     }
-    oldmsg := oldSmc.Message()
-    oldmsg.(*object.Message).AppendOutput(intfc.stub.GetSdk().Message().(*object.Message).OutputReceipts())
+	receipts := make([]types.KVPair, 0)
+	for _, v := range response.Tags {
+		receipts = append(receipts, types.KVPair{Key:v.Key, Value:v.Value})
+	}
+    oldmsg.(*object.Message).AppendOutput(receipts)
     {{if (len $method.Results)}}return response.Data{{end}}
 }
 
@@ -87,24 +96,41 @@ type OtherContract struct {
 }
 
 type ImportContract struct {
-	Contracts []OtherContract
+	Contracts  []OtherContract
+	IContracts []OtherContract
 
-	OrgID              string
-	PackageName        string
-	ContractStructure  string
+	// 当前合约参数
+	OrgID             string
+	PackageName       string
+	ContractStructure string
+
+	// 跨合约信息
 	ImportContract     string
+	DirectionName      string
+	ImportPackage      string
+	Index              int
 	ImportInterfaces   []parsecode.Method
 	ImportContractInfo std.ContractVersionList
 }
 
-func res2importContract(res *parsecode.Result, reses []*parsecode.Result, contractInfoList []ContractInfo) ImportContract {
+func res2importContract(res *parsecode.Result, reses []*parsecode.Result, contractInfoList []ContractInfo, index int) (*ImportContract, error) {
 
 	importContract := ImportContract{
-		Contracts:        make([]OtherContract, 0),
-		ImportInterfaces: make([]parsecode.Method, 0),
+		Contracts:         make([]OtherContract, 0),
+		IContracts:        make([]OtherContract, 0),
+		ImportInterfaces:  res.ImportContracts[index].Interfaces,
+		ContractStructure: res.ContractStructure,
+		PackageName:       res.PackageName,
+		Index:             index,
+		ImportContract:    res.ImportContracts[index].Name,
+		OrgID:             res.OrgID,
 	}
 
 	for _, item := range reses {
+		if len(importContract.DirectionName) == 0 && item.ContractName == importContract.ImportContract {
+			importContract.DirectionName = item.DirectionName
+		}
+
 		contract := OtherContract{
 			OrgID:         item.OrgID,
 			DirectionName: item.DirectionName,
@@ -117,18 +143,22 @@ func res2importContract(res *parsecode.Result, reses []*parsecode.Result, contra
 		contract.EffectHeight, contract.LoseHeight = contractInfoOfNameVersion(contract.Name, contract.Version, contractInfoList)
 
 		importContract.Contracts = append(importContract.Contracts, contract)
-
 	}
-	importContract.OrgID = res.OrgID
-	importContract.ImportContract = res.ImportContract
-	importContract.ImportInterfaces = res.ImportInterfaces
-	importContract.ContractStructure = res.ContractStructure
-	importContract.PackageName = res.PackageName
 
+	mContracts := importVersions(importContract.Contracts, importContract.ImportContract, importContract.ImportInterfaces)
+	if len(mContracts) == 0 {
+		return nil, errors.New("genImport error, no adaptive contract's version")
+	}
+
+	for _, value := range mContracts {
+		importContract.IContracts = append(importContract.IContracts, value)
+	}
+
+	importContract.ImportPackage = importContract.IContracts[0].PackageName
 	importContract.ImportContractInfo.Name = importContract.ImportContract
 	importContract.ImportContractInfo.EffectHeights = []int64{1000, -1}
 
-	return importContract
+	return &importContract, nil
 }
 
 func contractInfoOfNameVersion(name, version string, contractInfoList []ContractInfo) (effectHeight, loseHeight int64) {
@@ -143,8 +173,8 @@ func contractInfoOfNameVersion(name, version string, contractInfoList []Contract
 }
 
 // GenImport - generate import code from source smart contract to destination smart contract
-func GenImport(inPath string, res *parsecode.Result, reses []*parsecode.Result, contractInfoList []ContractInfo) error {
-	filename := filepath.Join(inPath, res.PackageName+"_autogen_import_"+res.ImportContract+".go")
+func GenImport(inPath string, res *parsecode.Result, reses []*parsecode.Result, contractInfoList []ContractInfo, index int) error {
+	filename := filepath.Join(inPath, res.PackageName+"_autogen_import_"+res.ImportContracts[index].Name+".go")
 
 	funcMap := template.FuncMap{
 		"upperFirst":   parsecode.UpperFirst,
@@ -169,7 +199,10 @@ func GenImport(inPath string, res *parsecode.Result, reses []*parsecode.Result, 
 		return err
 	}
 
-	importContract := res2importContract(res, reses, contractInfoList)
+	importContract, err := res2importContract(res, reses, contractInfoList, index)
+	if err != nil {
+		return err
+	}
 
 	var buf bytes.Buffer
 	if err = tmpl.Execute(&buf, importContract); err != nil {
@@ -343,7 +376,10 @@ func getArg(functions []parsecode.Function, method parsecode.Method) string {
 					paramStr += parsecode.UpperFirst(name) + ":" + method.Params[index1].Names[index2] + ","
 				}
 			}
-			paramStr = paramStr[:len(paramStr)-1]
+
+			if len(paramStr) != 0 {
+				paramStr = paramStr[:len(paramStr)-1]
+			}
 			paramStr = "{" + paramStr + "}"
 
 			if fLenParams == mLenParams {
@@ -372,4 +408,20 @@ func isEx(allContracts []OtherContract, contractName string, methods []parsecode
 	}
 
 	return false
+}
+
+func importVersions(allContracts []OtherContract, contractName string, interfaces []parsecode.Method) map[string]OtherContract {
+	contracts := getContracts(allContracts, contractName)
+
+	verList := make(map[string]OtherContract, 0)
+
+	for _, item := range interfaces {
+		for _, contract := range contracts {
+			if isOK(contract.Functions, item) {
+				verList[contract.Version] = contract
+			}
+		}
+	}
+
+	return verList
 }

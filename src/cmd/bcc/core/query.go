@@ -1,6 +1,7 @@
 package core
 
 import (
+	tx1 "blockchain/abciapp_v1.0/tx/tx"
 	"blockchain/smcsdk/sdk/bn"
 	"blockchain/smcsdk/sdk/rlp"
 	"blockchain/smcsdk/sdk/std"
@@ -8,11 +9,14 @@ import (
 	"blockchain/types"
 	"cmd/bcc/common"
 	"common/wal"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/tendermint/go-crypto"
@@ -114,8 +118,8 @@ func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (t
 		}
 	}
 
-	// parse transaction //todo 兼容v1
-	transaction, fromAddr, err := tx2.TxParse(string(resultBlock.Block.Txs[result.Index]))
+	txStr := string(resultBlock.Block.Txs[result.Index])
+	nonce, gasLimit, fromAddr, note, messages, err := parseTx(chainID, txStr)
 	if err != nil {
 		return
 	}
@@ -127,20 +131,89 @@ func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (t
 	tx.Log = result.DeliverResult.Log
 	tx.BlockHash = hex.EncodeToString(resultBlock.BlockMeta.BlockID.Hash)
 	tx.BlockHeight = resultBlock.BlockMeta.Header.Height
-	tx.From = fromAddr.Address()
-	tx.Nonce = transaction.Nonce
-	tx.GasLimit = uint64(transaction.GasLimit)
+	tx.From = fromAddr
+	tx.Nonce = nonce
+	tx.GasLimit = gasLimit
 	tx.Fee = result.DeliverResult.Fee
-	tx.Note = transaction.Note
-	tx.Messages = make([]Message, 0)
+	tx.Note = note
+	tx.Messages = messages
+	tx.Tags = make(map[string]*Tag)
 
-	var msg Message
-	for i := 0; i < len(transaction.Messages); i++ {
-		msg, err = message(chainID, transaction.Messages[i])
+	for i := 0; i < len(result.DeliverResult.Tags); i++ {
+
+		Tag := new(Tag)
+		Tag.Receipt = make(map[string]interface{})
+		Receipt := make(map[string]interface{})
+
+		//aKey, err := base64.StdEncoding.DecodeString(string(result.DeliverResult.Tags[i].Key))
+
+		err = json.Unmarshal(result.DeliverResult.Tags[i].Value, &Tag)
+		if err != nil {
+			return nil, err
+		}
+
+		aDec, err := base64.StdEncoding.DecodeString(Tag.ReceiptBytes)
+		err = json.Unmarshal(aDec, &Receipt)
+		if err != nil {
+			return nil, err
+		}
+
+		Tag.Receipt["token"] = Receipt["token"]
+		Tag.Receipt["from"] = Receipt["from"]
+		Tag.Receipt["to"] = Receipt["to"]
+		Tag.Receipt["value"] = Receipt["value"]
+
+		key := "/" + strconv.Itoa(i) + "/" + Tag.Name
+		tx.Tags[key] = Tag
+
+	}
+	return
+}
+
+func parseTx(chainID, txStr string) (nonce, gasLimit uint64, fromAddr, note string, messages []Message, err error) {
+
+	messages = make([]Message, 0)
+
+	splitTx := strings.Split(txStr, ".")
+	if splitTx[1] == "v1" {
+		var txv1 tx1.Transaction
+		fromAddr, _, err = txv1.TxParse(chainID, txStr)
 		if err != nil {
 			return
 		}
-		tx.Messages = append(tx.Messages, msg)
+		nonce = txv1.Nonce
+		note = txv1.Note
+		gasLimit = txv1.GasLimit
+
+		var msg Message
+		msg, err = messageV1(chainID, txv1)
+		if err != nil {
+			return
+		}
+		messages = append(messages, msg)
+	} else if splitTx[1] == "v2" {
+		var txv2 types.Transaction
+		var pubKey crypto.PubKeyEd25519
+		txv2, pubKey, err = tx2.TxParse(txStr)
+		if err != nil {
+			return
+		}
+		fromAddr = pubKey.Address()
+		nonce = txv2.Nonce
+		note = txv2.Note
+		gasLimit = uint64(txv2.GasLimit)
+
+		var msg Message
+		for i := 0; i < len(txv2.Messages); i++ {
+			msg, err = message(chainID, txv2.Messages[i])
+			if err != nil {
+				return
+			}
+			messages = append(messages, msg)
+		}
+	} else {
+		err = errors.New("unsupported tx=" + txStr)
+		return
 	}
 
 	return
@@ -223,8 +296,15 @@ func balanceOfToken(accAddress types.Address, tokenName, chainID string) (result
 		}
 		result.Balance = tokenBalance.Balance.String()
 	}
+
+	tokenInfo := new(std.Token)
+	err = DoHttpQueryAndParse(addrS, std.KeyOfGenesisToken(), tokenInfo)
+	if err != nil {
+		return
+	}
+
 	result.TokenAddress = tokenAddress
-	result.TokenName = tokenName
+	result.TokenName = tokenInfo.Name
 
 	return
 }
@@ -455,6 +535,31 @@ func message(chainID string, message types.Message) (msg Message, err error) {
 		}
 		msg.To = to
 		msg.Value = value.String()
+	}
+
+	return
+}
+
+func messageV1(chainID string, tx tx1.Transaction) (msg Message, err error) {
+
+	var methodInfo tx1.MethodInfo
+	if err = rlp.DecodeBytes(tx.Data, &methodInfo); err != nil {
+		return
+	}
+	methodID := fmt.Sprintf("%x", methodInfo.MethodID)
+
+	msg.SmcAddress = tx.To
+	if msg.SmcName, msg.Method, err = contractNameAndMethod(tx.To, chainID, methodID); err != nil {
+		return
+	}
+
+	if methodID == transferMethodID {
+		var itemsBytes = make([][]byte, 0)
+		if err = rlp.DecodeBytes(methodInfo.ParamData, &itemsBytes); err != nil {
+			return
+		}
+		msg.To = string(itemsBytes[0])
+		msg.Value = new(big.Int).SetBytes(itemsBytes[1][:]).String()
 	}
 
 	return

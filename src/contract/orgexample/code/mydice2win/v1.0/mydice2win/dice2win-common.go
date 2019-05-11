@@ -3,6 +3,7 @@ package mydice2win
 import (
 	"blockchain/smcsdk/sdk"
 	"blockchain/smcsdk/sdk/bn"
+	"blockchain/smcsdk/sdk/mapx"
 	"blockchain/smcsdk/sdk/types"
 	"fmt"
 )
@@ -61,11 +62,11 @@ func (dw *Dice2Win) checkSettings(newSettings *Settings) {
 	sdk.Require(len(newSettings.TokenNames) > 0,
 		types.ErrInvalidParameter, "tokenNames cannot be empty")
 
-	for _, tokenName := range newSettings.TokenNames {
+	mapx.ForRange(newSettings.TokenNames, func(tokenName string, v struct{}) {
 		token := dw.sdk.Helper().TokenHelper().TokenOfName(tokenName)
 		sdk.Require(token != nil,
 			types.ErrInvalidParameter, fmt.Sprintf("tokenName=%s is not exist", tokenName))
-	}
+	})
 
 	sdk.Require(newSettings.MaxBet > 0,
 		types.ErrInvalidParameter, "MaxBet must be bigger than zero")

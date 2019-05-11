@@ -4,8 +4,8 @@ import (
 	"blockchain/smcsdk/sdk"
 	"blockchain/smcsdk/sdk/rlp"
 	types2 "blockchain/types"
+	"contract/orgexample/code/mydice2win/v1.0/mydice2win"
 	stubTypes "contract/stubcommon/types"
-
 	"github.com/tendermint/tmlibs/log"
 )
 
@@ -19,6 +19,27 @@ var _ stubTypes.IContractStub = (*PlayerBookStub)(nil)
 //New new stub
 func New(logger log.Logger) stubTypes.IContractStub {
 	return &PlayerBookStub{logger: logger}
+}
+
+// InitChain initial smart contract
+func (mc *PlayerBookStub) InitChain(smc sdk.ISmartContract) (response types2.Response) {
+
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.InitChain()
+
+	response.Code = types2.CodeOK
+	return response
+}
+
+// UpdateChain update smart contract
+func (mc *PlayerBookStub) UpdateChain(smc sdk.ISmartContract) (response types2.Response) {
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.UpdateChain()
+
+	response.Code = types2.CodeOK
+	return response
 }
 
 //Invoke invoke function

@@ -6,6 +6,8 @@ import (
 )
 
 type IContractStub interface {
+	InitChain(smcapi sdk.ISmartContract) types.Response
+	UpdateChain(smcapi sdk.ISmartContract) types.Response
 	Invoke(smcapi sdk.ISmartContract) types.Response
 }
 

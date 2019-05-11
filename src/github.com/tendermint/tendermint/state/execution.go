@@ -3,6 +3,8 @@ package state
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
+
 	"github.com/ebuchman/fail-test"
 	"github.com/pkg/errors"
 	abci "github.com/tendermint/abci/types"
@@ -11,7 +13,6 @@ import (
 	"github.com/tendermint/tendermint/types"
 	dbm "github.com/tendermint/tmlibs/db"
 	"github.com/tendermint/tmlibs/log"
-	"os"
 )
 
 var SyncTo int64 = 0
@@ -237,7 +238,7 @@ func execBlockOnProxyApp(logger log.Logger, proxyAppConn proxy.AppConnConsensus,
 		logger.Error("Error in proxyAppConn.BeginBlock", "err", err)
 		return nil, err
 	}
-	//增加gichain判断beginBlock是否正确
+	//增加bcchain判断beginBlock是否正确
 	if res.Code != abci.CodeTypeOK {
 
 		logger.Error("abci server  excute beginBlock failed", "log", res.Log)
@@ -253,13 +254,13 @@ func execBlockOnProxyApp(logger log.Logger, proxyAppConn proxy.AppConnConsensus,
 	}
 
 	// End block
-	abciResponses.EndBlock, err = proxyAppConn.EndBlockSync(abci.RequestEndBlock{block.Height})
+	abciResponses.EndBlock, err = proxyAppConn.EndBlockSync(abci.RequestEndBlock{Height: block.Height})
 	if err != nil {
 		logger.Error("Error in proxyAppConn.EndBlock", "err", err)
 		return nil, err
 	}
 
-	logger.Info("Executed block", "height", block.Height, "validTxs", validTxs, "invalidTxs", invalidTxs)
+	logger.Warn("Executed block", "height", block.Height, "validTxs", validTxs, "invalidTxs", invalidTxs)
 
 	valUpdates := abciResponses.EndBlock.ValidatorUpdates
 	if len(valUpdates) > 0 {

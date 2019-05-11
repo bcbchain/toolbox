@@ -62,7 +62,8 @@ func CreateResponse(message sdk.IMessage, oriTags []common.KVPair, data string, 
 	for _, v := range message.(*object.Message).OutputReceipts() {
 		tag := common.KVPair{}
 		tag.Value = v.Value
-		tag.Key = v.Key
+		keySplit := strings.Split(string(v.Key), "/")
+		tag.Key = []byte(fmt.Sprintf("/%d/%s", len(response.Tags), keySplit[2]))
 		response.Tags = append(response.Tags, tag)
 	}
 	return
@@ -138,7 +139,7 @@ func FeeAndReceipt(smc sdk.ISmartContract, bMethod bool) (fee, gasUsed int64, re
 }
 
 func CalcKey(name, version string) string {
-	if strings.HasPrefix(name, "token-template-") {
+	if strings.HasPrefix(name, "token-templet-") {
 		name = "token-issue"
 	}
 	return name + strings.Replace(version, ".", "", -1)

@@ -75,8 +75,8 @@ func TestABCIResponsesSaveLoad1(t *testing.T) {
 	// build mock responses
 	block := makeBlock(state, 2)
 	abciResponses := NewABCIResponses(block)
-	abciResponses.DeliverTx[0] = &abci.ResponseDeliverTx{Data: []byte("foo"), Tags: nil}
-	abciResponses.DeliverTx[1] = &abci.ResponseDeliverTx{Data: []byte("bar"), Log: "ok", Tags: nil}
+	abciResponses.DeliverTx[0] = &abci.ResponseDeliverTx{Data: "foo", Tags: nil}
+	abciResponses.DeliverTx[1] = &abci.ResponseDeliverTx{Data: "bar", Log: "ok", Tags: nil}
 	abciResponses.EndBlock = &abci.ResponseEndBlock{ValidatorUpdates: []abci.Validator{
 		{
 			PubKey: crypto.GenPrivKeyEd25519().PubKey().Bytes(),
@@ -111,7 +111,7 @@ func TestABCIResponsesSaveLoad2(t *testing.T) {
 		},
 		1: {
 			[]*abci.ResponseDeliverTx{
-				{Code: 32, Data: []byte("Hello"), Log: "Huh?"},
+				{Code: 32, Data: "Hello", Log: "Huh?"},
 			},
 			types.ABCIResults{
 				{32, []byte("Hello")},
@@ -119,10 +119,10 @@ func TestABCIResponsesSaveLoad2(t *testing.T) {
 		2: {
 			[]*abci.ResponseDeliverTx{
 				{Code: 383},
-				{Data: []byte("Gotcha!"),
+				{Data: "Gotcha!",
 					Tags: []cmn.KVPair{
-						cmn.KVPair{[]byte("a"), []byte{1}},
-						cmn.KVPair{[]byte("build"), []byte("stuff")},
+						{Key: []byte("a"), Value: []byte{1}},
+						{Key: []byte("build"), Value: []byte("stuff")},
 					}},
 			},
 			types.ABCIResults{
@@ -221,7 +221,7 @@ func TestOneValidatorChangesSaveLoad(t *testing.T) {
 			changeIndex++
 			power++
 		}
-		header, blockID, responses := makeHeaderPartsResponsesValPowerChange(state, i, power)
+		header, blockID, responses := makeHeaderPartsResponsesValPowerChange(state, i, int64(power))
 		state, err = updateState(state, blockID, header, responses)
 		assert.Nil(t, err)
 		nextHeight := state.LastBlockHeight + 1
@@ -239,7 +239,7 @@ func TestOneValidatorChangesSaveLoad(t *testing.T) {
 			changeIndex++
 			power++
 		}
-		testCases[i-1] = power
+		testCases[i-1] = int64(power)
 	}
 
 	for i, power := range testCases {
@@ -286,7 +286,7 @@ func TestManyValidatorChangesSaveLoad(t *testing.T) {
 func genValSet(size int) *types.ValidatorSet {
 	vals := make([]*types.Validator, size)
 	for i := 0; i < size; i++ {
-		vals[i] = types.NewValidator(crypto.GenPrivKeyEd25519().PubKey(), 10)
+		vals[i] = types.NewValidator(crypto.GenPrivKeyEd25519().PubKey(), 10, "", "")
 	}
 	return types.NewValidatorSet(vals)
 }
@@ -435,8 +435,8 @@ func makeHeaderPartsResponsesValPubKeyChange(state State, height int64,
 	if !bytes.Equal(pubkey.Bytes(), val.PubKey.Bytes()) {
 		abciResponses.EndBlock = &abci.ResponseEndBlock{
 			ValidatorUpdates: []abci.Validator{
-				{val.PubKey.Bytes(), 0},
-				{pubkey.Bytes(), 10},
+				{val.PubKey.Bytes(), 0, "", ""},
+				{pubkey.Bytes(), 10, "", ""},
 			},
 		}
 	}
@@ -454,10 +454,10 @@ func makeHeaderPartsResponsesValPowerChange(state State, height int64,
 
 	// if the pubkey is new, remove the old and add the new
 	_, val := state.Validators.GetByIndex(0)
-	if val.VotingPower != power {
+	if int64(val.VotingPower) != power {
 		abciResponses.EndBlock = &abci.ResponseEndBlock{
 			ValidatorUpdates: []abci.Validator{
-				{val.PubKey.Bytes(), power},
+				{val.PubKey.Bytes(), uint64(power), "", ""},
 			},
 		}
 	}

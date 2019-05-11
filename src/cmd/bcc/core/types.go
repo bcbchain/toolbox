@@ -109,18 +109,19 @@ type Message struct {
 
 // TxResult - transaction struct
 type TxResult struct {
-	TxHash      string        `json:"txHash"`
-	TxTime      string        `json:"txTime"`
-	Code        uint32        `json:"code"`
-	Log         string        `json:"log"`
-	BlockHash   string        `json:"blockHash"`
-	BlockHeight int64         `json:"blockHeight"`
-	From        types.Address `json:"from"`
-	Nonce       uint64        `json:"nonce"`
-	GasLimit    uint64        `json:"gasLimit"`
-	Fee         uint64        `json:"fee"`
-	Note        string        `json:"note"`
-	Messages    []Message     `json:"messages"`
+	TxHash      string          `json:"txHash"`
+	TxTime      string          `json:"txTime"`
+	Code        uint32          `json:"code"`
+	Log         string          `json:"log"`
+	BlockHash   string          `json:"blockHash"`
+	BlockHeight int64           `json:"blockHeight"`
+	From        types.Address   `json:"from"`
+	Nonce       uint64          `json:"nonce"`
+	GasLimit    uint64          `json:"gasLimit"`
+	Fee         uint64          `json:"fee"`
+	Note        string          `json:"note"`
+	Messages    []Message       `json:"messages"`
+	Tags        map[string]*Tag `json:"tags"`
 }
 
 // BlockResult - block struct
@@ -177,11 +178,15 @@ type VersionResult struct {
 // 定义交易数据结构
 
 type MethodInfo struct {
-	MethodID  uint32
-	ParamData []byte
+	MethodID  uint32 `json:"MethodID"`
+	ParamData []byte `json:"ParamData"`
 }
 
-// VersionOfContract Contract version of the collection
-//type VersionOfContract struct {
-//	Version map[string][]string `json:"version"` //合约版本
-//}
+// Tag - Tag struct
+type Tag struct {
+	Name         string                 `json:"Name"`
+	ContractAddr string                 `json:"ContractAddr"`
+	ReceiptBytes string                 `json:"ReceiptBytes"`
+	ReceiptHash  string                 `json:"ReceiptHash"`
+	Receipt      map[string]interface{} `json:"Receipt"`
+}

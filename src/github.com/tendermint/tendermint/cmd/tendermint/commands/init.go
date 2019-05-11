@@ -148,7 +148,7 @@ func initFiles(cmd *cobra.Command, args []string) {
 		fmt.Printf("copy file err: %s\n", err)
 		return
 	}
-	err = types.CopyFile(genesisPath+"/"+chainID+"-genesis.json.sig", genPath[:len(genPath)-5]+"-signature.json")
+	err = types.CopyFile(genesisPath+"/"+chainID+"-genesis.json.sig", genPath[:len(genPath)-5]+".json.sig")
 	if err != nil {
 		fmt.Printf("copy file err: %s\n", err)
 		return

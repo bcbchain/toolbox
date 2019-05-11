@@ -194,11 +194,19 @@ type (
 	ResultUnsafeProfile      struct{}
 	ResultSubscribe          struct{}
 	ResultUnsubscribe        struct{}
-	ResultHealth             struct{}
 )
 
 // Event data from a subscription
 type ResultEvent struct {
 	Query string            `json:"query"`
 	Data  types.TMEventData `json:"data"`
+}
+
+// Result of health data
+type ResultHealth struct {
+	ChainID         string `json:"chain_id"`
+	Version         string `json:"version"`
+	ChainVersion    int64  `json:"chain_version"`
+	LastBlockHeight int64  `json:"last_block_height"`
+	ValidatorCount  int64  `json:"validator_count"`
 }

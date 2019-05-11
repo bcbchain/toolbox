@@ -378,6 +378,9 @@ func (x *Number) SetBytes(buf []byte) Number {
 
 //MarshalJSON json serialization for x
 func (x *Number) MarshalJSON() (data []byte, err error) {
+	if x == nil || x.V == nil {
+		return []byte("null"), nil
+	}
 	return []byte(x.V.String()), nil
 }
 

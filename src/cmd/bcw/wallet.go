@@ -51,7 +51,7 @@ func Export(keyStorePath, name, password string) error {
 	PubK := acct.PubKey().(crypto.PubKeyEd25519)
 
 	fmt.Println("OK")
-	fmt.Println("PrivateKey: ", hex.EncodeToString(PriK[:]))
+	fmt.Println("PrivateKey: ", hex.EncodeToString(PriK[:len(PriK)-len(PubK)]))
 	fmt.Println("PubKey:     ", hex.EncodeToString(PubK[:]))
 
 	return nil
@@ -109,7 +109,7 @@ func SignFile(keyStorePath, name, password, file, mode string) error {
 		return err
 	}
 
-	var SignatureFile string
+	SignatureFile := file + ".sig"
 	if mode == "b" {
 		acct.SignBinFile(file, SignatureFile)
 

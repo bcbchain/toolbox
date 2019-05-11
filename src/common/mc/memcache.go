@@ -30,7 +30,7 @@ type txCache struct {
 func NewMcInstance() *Instance {
 	mi := Instance{}
 	mi.llCache = make(map[string]interface{})
-	mi.mcCache = make(map[int64](map[string]*MemCache))
+	mi.mcCache = make(map[int64]map[string]*MemCache)
 
 	return &mi
 }

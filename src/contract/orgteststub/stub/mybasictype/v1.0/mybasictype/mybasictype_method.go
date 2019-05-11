@@ -6,6 +6,7 @@ import (
 	"blockchain/smcsdk/sdk/rlp"
 	sdkTypes "blockchain/smcsdk/sdk/types"
 	"blockchain/types"
+	"contract/orgexample/code/mydice2win/v1.0/mydice2win"
 	"contract/stubcommon/common"
 	stubTypes "contract/stubcommon/types"
 	"fmt"
@@ -44,6 +45,27 @@ func FuncRecover(response *types.Response) {
 	}
 }
 
+// InitChain initial smart contract
+func (mc *MyBasicTypeStub) InitChain(smc sdk.ISmartContract) (response types.Response) {
+
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.InitChain()
+
+	response.Code = types.CodeOK
+	return response
+}
+
+// UpdateChain update smart contract
+func (mc *MyBasicTypeStub) UpdateChain(smc sdk.ISmartContract) (response types.Response) {
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.UpdateChain()
+
+	response.Code = types.CodeOK
+	return response
+}
+
 // Invoke invoke method
 func (mc *MyBasicTypeStub) Invoke(smc sdk.ISmartContract) (response types.Response) {
 	defer FuncRecover(&response)
@@ -51,7 +73,7 @@ func (mc *MyBasicTypeStub) Invoke(smc sdk.ISmartContract) (response types.Respon
 	// 生成手续费收据
 	fee, gasUsed, _, err := common.FeeAndReceipt(smc, true)
 	if err.ErrorCode != types.CodeOK {
-		response = common.CreateResponse(smc.Message(), "", fee, gasUsed, smc.Tx().GasLimit())
+		response = common.CreateResponse(smc.Message(), nil, "", fee, gasUsed, smc.Tx().GasLimit(), sdkTypes.Error{})
 		return
 	}
 
@@ -114,7 +136,7 @@ func (mc *MyBasicTypeStub) Invoke(smc sdk.ISmartContract) (response types.Respon
 	case "30":
 		data = echoMap8(smc)
 	}
-	response = common.CreateResponse(smc.Message(), data, fee, gasUsed, smc.Tx().GasLimit())
+	response = common.CreateResponse(smc.Message(), nil, data, fee, gasUsed, smc.Tx().GasLimit(), sdkTypes.Error{})
 	return
 }
 

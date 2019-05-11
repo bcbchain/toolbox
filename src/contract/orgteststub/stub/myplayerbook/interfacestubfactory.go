@@ -15,6 +15,9 @@ func NewInterfaceStub(smc sdk.ISmartContract, contractName string) types.IContra
 	ch := helper.ContractHelper{}
 	ch.SetSMC(smc)
 	contract := ch.ContractOfName(contractName)
+	if contract == nil {
+		return nil
+	}
 
 	switch contract.Version() {
 	case "1.0":

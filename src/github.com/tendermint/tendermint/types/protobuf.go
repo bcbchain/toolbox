@@ -25,12 +25,15 @@ func (tm2pb) Header(header *Header) types.Header {
 		LastAllocation:  header.LastAllocation,
 		ProposerAddress: header.ProposerAddress,
 		RewardAddress:   header.RewardAddress,
-		Version:         header.Version,
-		ChainVersion:    header.ChainVersion,
 	}
 	softforks.Init()
 	if softforks.IsForkForV1023233(header.Height) {
 		h.RandomeOfBlock = header.RandomOfBlock
+	}
+
+	if header.ChainVersion != nil && *header.ChainVersion != 0 {
+		h.ChainVersion = *header.ChainVersion
+		h.Version = *header.Version
 	}
 	return h
 }

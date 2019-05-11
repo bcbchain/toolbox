@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+
 	abci "github.com/tendermint/abci/types"
 	cfg "github.com/tendermint/tendermint/config"
 	"github.com/tendermint/tendermint/types"
@@ -197,7 +198,7 @@ func LoadValidators(db dbm.DB, height int64) (*types.ValidatorSet, error) {
 		valInfo = loadValidatorsInfo(db, valInfo.LastHeightChanged)
 		if valInfo == nil {
 			cmn.PanicSanity(fmt.Sprintf(`Couldn't find validators at height %d as
-                        last changed from height %d`, valInfo.LastHeightChanged, height))
+                        last changed from height %d`, 0, height))
 		}
 	}
 
@@ -262,7 +263,7 @@ func LoadConsensusParams(db dbm.DB, height int64) (types.ConsensusParams, error)
 		paramsInfo = loadConsensusParamsInfo(db, paramsInfo.LastHeightChanged)
 		if paramsInfo == nil {
 			cmn.PanicSanity(fmt.Sprintf(`Couldn't find consensus params at height %d as
-                        last changed from height %d`, paramsInfo.LastHeightChanged, height))
+                        last changed from height %d`, 0, height))
 		}
 	}
 

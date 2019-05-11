@@ -90,26 +90,26 @@ var (
 )
 
 func addCreateFlags() {
-	walletCreateCmd.PersistentFlags().StringVarP(&keyStorePath, "keystore", "k", "", "path of key store")
+	walletCreateCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", "", "path of key store")
 	walletCreateCmd.PersistentFlags().StringVarP(&walName, "name", "n", "", "name of wallet")
 	walletCreateCmd.PersistentFlags().StringVarP(&walPassword, "password", "p", "", "password of wallet")
 }
 
 func addExportFlags() {
-	exportCmd.PersistentFlags().StringVarP(&keyStorePath, "keystore", "k", "", "path of key store")
+	exportCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", "", "path of key store")
 	exportCmd.PersistentFlags().StringVarP(&walName, "name", "n", "", "name of wallet")
 	exportCmd.PersistentFlags().StringVarP(&walPassword, "password", "p", "", "password of wallet")
 }
 
 func addImportFlags() {
-	importCmd.PersistentFlags().StringVarP(&keyStorePath, "keystore", "k", "", "path of key store")
+	importCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", "", "path of key store")
 	importCmd.PersistentFlags().StringVarP(&walName, "name", "n", "", "name of wallet")
 	importCmd.PersistentFlags().StringVarP(&walPassword, "password", "p", "", "password of wallet")
 	importCmd.PersistentFlags().StringVarP(&PrivateKey, "privkey", "y", "", "hex plaintext of private key ")
 }
 
 func addSignFileFlags() {
-	signFileCmd.PersistentFlags().StringVarP(&keyStorePath, "keystore", "k", "", "path of key store")
+	signFileCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", "", "path of key store")
 	signFileCmd.PersistentFlags().StringVarP(&walName, "name", "n", "", "name of wallet")
 	signFileCmd.PersistentFlags().StringVarP(&walPassword, "password", "p", "", "password of wallet")
 	signFileCmd.PersistentFlags().StringVarP(&File, "file", "f", "", "name of signature file")
@@ -118,7 +118,7 @@ func addSignFileFlags() {
 }
 
 func addSignDataFlags() {
-	signDataCmd.PersistentFlags().StringVarP(&keyStorePath, "keystore", "k", "", "path of key store")
+	signDataCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", "", "path of key store")
 	signDataCmd.PersistentFlags().StringVarP(&walName, "name", "n", "", "name of wallet")
 	signDataCmd.PersistentFlags().StringVarP(&walPassword, "password", "p", "", "password of wallet")
 	signDataCmd.PersistentFlags().StringVarP(&Data, "data", "d", "", "hex data to be signed")

@@ -126,11 +126,11 @@ func GenMarkdown(res *parsecode.Result, port int, destDir string) error {
 		}
 	}()
 
-	n, err := f.WriteString(buf.String())
+	_, err = f.WriteString(buf.String())
 	if err != nil {
 		return err
 	}
-	fmt.Println(n, "byte write to file")
+	// fmt.Println(n, "byte write to file")
 
 	return nil
 }

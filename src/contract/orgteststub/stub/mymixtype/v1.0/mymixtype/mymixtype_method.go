@@ -6,6 +6,7 @@ import (
 	sdktypes "blockchain/smcsdk/sdk/types"
 	"blockchain/smcsdk/sdkimpl/object"
 	"blockchain/types"
+	"contract/orgexample/code/mydice2win/v1.0/mydice2win"
 	stubTypes "contract/stubcommon/types"
 
 	"contract/orgteststub/code/mymixtype/v1.0/mymixtype"
@@ -29,6 +30,27 @@ func New(logger log.Logger) stubTypes.IContractStub {
 	stub.logger = logger
 
 	return &stub
+}
+
+// InitChain initial smart contract
+func (mc *MyMixTypeStub) InitChain(smc sdk.ISmartContract) (response types.Response) {
+
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.InitChain()
+
+	response.Code = types.CodeOK
+	return response
+}
+
+// UpdateChain update smart contract
+func (mc *MyMixTypeStub) UpdateChain(smc sdk.ISmartContract) (response types.Response) {
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.UpdateChain()
+
+	response.Code = types.CodeOK
+	return response
 }
 
 // Invoke invoke method

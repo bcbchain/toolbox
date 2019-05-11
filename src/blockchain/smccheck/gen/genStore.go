@@ -30,11 +30,14 @@ func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}({{expK $s 0}}) bn
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}({{expK $s 0}}) {{$s|expV}} {
 	return {{mp $s}}{{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}), {{md $s}}).({{mr $s}})
 }{{end}}
+func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$s|expNames|upperFirst}}({{expK $s 0}}) bool {
+	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}))
+}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$s|expNames|upperFirst}}({{expK $s 0}}, v {{$s|expV}}) {
 	{{$.ReceiverName}}.sdk.Helper().StateHelper().Set(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}), {{if $isMVStar}}v{{else}}&v{{end}})
 }
-func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$s|expNames|upperFirst}}({{expK $s 0}}) bool {
-	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}))
+func ({{$.ReceiverName}} *{{$.ContractName}}) _del{{$s|expNames|upperFirst}}({{expK $s 0}}) {
+	{{$.ReceiverName}}.sdk.Helper().StateHelper().Delete(fmt.Sprintf("/{{$s|expNames}}{{expK2K $s 0}}))
 }
 {{else}}{{if $isBnN}}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}() bn.Number {
@@ -44,11 +47,14 @@ func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}() bn.Number {
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$s|expNames}}() {{$s|expType}} {
 	return {{if not $isStar}}*{{end}}{{$.ReceiverName}}.sdk.Helper().StateHelper().GetEx("/{{$s|expNames}}", {{md $s}}).(*{{$s|expNoS}})
 }{{end}}
+func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$s|expNames|upperFirst}}() bool {
+	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check("/{{$s|expNames}}")
+}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$s|expNames|upperFirst}}(v {{$s|expType}}) {
 	{{$.ReceiverName}}.sdk.Helper().StateHelper().Set("/{{$s|expNames}}", {{if $isStar}}v{{else}}&v{{end}})
 }
-func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$s|expNames|upperFirst}}() bool {
-	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check("/{{$s|expNames}}")
+func ({{$.ReceiverName}} *{{$.ContractName}}) _del{{$s|expNames|upperFirst}}() {
+	{{$.ReceiverName}}.sdk.Helper().StateHelper().Delete("/{{$s|expNames}}")
 }
 {{end}}
 {{end}}
@@ -73,8 +79,8 @@ func ({{$.ReceiverName}} *{{$.ContractName}}) _clr{{$c|expNames|upperFirst}}({{e
 func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$c|expNames|upperFirst}}({{expK $c 0}}) bool {
 	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}))
 }
-func ({{$.ReceiverName}} *{{$.ContractName}}) _McChk{{$c|expNames|upperFirst}}({{expK $c 0}}) bool {
-	return {{$.ReceiverName}}.sdk.Helper().StateHelper().McCheck(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}))
+func ({{$.ReceiverName}} *{{$.ContractName}}) _del{{$c|expNames|upperFirst}}({{expK $c 0}}) {
+	{{$.ReceiverName}}.sdk.Helper().StateHelper().McDelete(fmt.Sprintf("/{{$c|expNames}}{{expK2K $c 0}}))
 }
 {{else}}{{if $isBnN}}
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}() bn.Number {
@@ -84,14 +90,17 @@ func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}() bn.Number {
 func ({{$.ReceiverName}} *{{$.ContractName}}) _{{$c|expNames}}() {{$c|expType}} {
 	return {{if not $isStar}}*{{end}}{{$.ReceiverName}}.sdk.Helper().StateHelper().McGetEx("/{{$c|expNames}}", {{md $c}}).({{mr $c}})
 }{{end}}
-func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$c|expNames|upperFirst}}(v {{$c|expType}}) {
-	{{$.ReceiverName}}.sdk.Helper().StateHelper().McSet("/{{$c|expNames}}", {{if $isStar}}v{{else}}&v{{end}})
+func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$c|expNames|upperFirst}}() bool {
+	return {{$.ReceiverName}}.sdk.Helper().StateHelper().McCheck("/{{$c|expNames}}")
 }
 func ({{$.ReceiverName}} *{{$.ContractName}}) _clr{{$c|expNames|upperFirst}}() {
 	{{$.ReceiverName}}.sdk.Helper().StateHelper().McClear("/{{$c|expNames}}")
 }
-func ({{$.ReceiverName}} *{{$.ContractName}}) _chk{{$c|expNames|upperFirst}}() bool {
-	return {{$.ReceiverName}}.sdk.Helper().StateHelper().Check("/{{$c|expNames}}")
+func ({{$.ReceiverName}} *{{$.ContractName}}) _set{{$c|expNames|upperFirst}}(v {{$c|expType}}) {
+	{{$.ReceiverName}}.sdk.Helper().StateHelper().McSet("/{{$c|expNames}}", {{if $isStar}}v{{else}}&v{{end}})
+}
+func ({{$.ReceiverName}} *{{$.ContractName}}) _del{{$c|expNames|upperFirst}}() {
+	{{$.ReceiverName}}.sdk.Helper().StateHelper().McDelete("/{{$c|expNames}}")
 }
 {{end}}
 {{end}}
@@ -117,7 +126,7 @@ func res2Store(res *parsecode.Result) storeExport {
 		for imp := range s.RelatedImport {
 			imports[imp] = struct{}{}
 		}
-		if isMap(s) {
+		if IsMap(s) {
 			imports[parsecode.Import{Path: "\"fmt\""}] = struct{}{}
 		}
 	}
@@ -126,7 +135,7 @@ func res2Store(res *parsecode.Result) storeExport {
 		for imp := range c.RelatedImport {
 			imports[imp] = struct{}{}
 		}
-		if isMap(c) {
+		if IsMap(c) {
 			imports[parsecode.Import{Path: "\"fmt\""}] = struct{}{}
 		}
 	}
@@ -149,12 +158,12 @@ func GenStore(inPath string, res *parsecode.Result) error {
 		"expV":       parsecode.ExpandMapFieldVal,
 		"expVNoS":    parsecode.ExpandMapFieldValNoStar,
 		"expK2K":     parsecode.ExpandMapFieldKeyToKey,
-		"isM":        isMap,
+		"isM":        IsMap,
 		"isS":        isStar,
 		"isMS":       isMapFieldValStar,
-		"isL":        isLiteralType,
+		"isL":        IsLiteralType,
 		"isML":       isMapValLiteral,
-		"isN":        isBnNumber,
+		"isN":        IsBnNumber,
 		"isNV":       isBnNumberValue,
 		"isVM":       isMapFieldValMap,
 		"mp":         makePrefixStar,
@@ -181,7 +190,7 @@ func GenStore(inPath string, res *parsecode.Result) error {
 
 }
 
-func isMap(f parsecode.Field) bool {
+func IsMap(f parsecode.Field) bool {
 	_, m := f.FieldType.(*ast.MapType)
 	return m
 }
@@ -191,7 +200,7 @@ func isStar(f parsecode.Field) bool {
 	return s
 }
 
-func isLiteralType(f parsecode.Field) bool {
+func IsLiteralType(f parsecode.Field) bool {
 	id, ok := f.FieldType.(*ast.Ident)
 	if !ok {
 		id1, ok := f.FieldType.(*ast.SelectorExpr)
@@ -221,7 +230,20 @@ func isLiteralType(f parsecode.Field) bool {
 	return false
 }
 
-func isBnNumber(f parsecode.Field) bool {
+func IsLiteralTypeEx(f parsecode.Field) bool {
+
+	_, ok := f.FieldType.(*ast.Ident)
+	if !ok {
+		id3, ok := f.FieldType.(*ast.ArrayType)
+		if ok {
+			return IsLiteralType(parsecode.Field{FieldType: id3.Elt})
+		}
+	}
+
+	return false
+}
+
+func IsBnNumber(f parsecode.Field) bool {
 	id, ok := f.FieldType.(*ast.SelectorExpr)
 	if !ok {
 		return false
@@ -294,9 +316,9 @@ func isMapFieldValMap(f parsecode.Field) bool {
 }
 
 func makeDefaultValueStr(f parsecode.Field) string {
-	if isLiteralType(f) {
+	if IsLiteralType(f) {
 		return "new(" + parsecode.ExpandTypeNoStar(f) + ")"
-	} else if isMap(f) {
+	} else if IsMap(f) {
 		m, ok := f.FieldType.(*ast.MapType)
 		if !ok {
 			return ""
@@ -313,7 +335,7 @@ func makeDefaultValueStr(f parsecode.Field) string {
 }
 
 func makeReturnStr(f parsecode.Field) string {
-	if isMap(f) {
+	if IsMap(f) {
 		m, ok := f.FieldType.(*ast.MapType)
 		if !ok {
 			return ""

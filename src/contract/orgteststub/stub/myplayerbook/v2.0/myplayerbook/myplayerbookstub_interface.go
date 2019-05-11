@@ -34,14 +34,13 @@ func (intfc *IntfcMyPlayerBookStub) SetSdk(smc sdk.ISmartContract) {
 }
 
 //Invoke invoke function
-//TODO: 跨合约调用是否可以不用返回response??
 func (intfc *IntfcMyPlayerBookStub) Invoke(methodID string, p interface{}) (response types2.Response) {
 	defer FuncRecover(&response)
 
 	// 扣手续费并生成手续费收据
 	fee, gasUsed, feeReceipt, err := common.FeeAndReceipt(intfc.smc, false)
 	if err.ErrorCode != types.CodeOK {
-		response = common.CreateResponse(intfc.smc.Message(), "", fee, gasUsed, intfc.smc.Tx().GasLimit())
+		response = common.CreateResponse(intfc.smc.Message(), nil, "", fee, gasUsed, intfc.smc.Tx().GasLimit(), types.Error{})
 		return
 	}
 	response.Fee = fee
@@ -60,7 +59,7 @@ func (intfc *IntfcMyPlayerBookStub) Invoke(methodID string, p interface{}) (resp
 	case "cccccccc": // prototype: RegisterName(string)(types.Error)
 		intfc.multiTypeParam(p)
 	}
-	response = common.CreateResponse(intfc.smc.Message(), data, fee, gasUsed, intfc.smc.Tx().GasLimit())
+	response = common.CreateResponse(intfc.smc.Message(), nil, data, fee, gasUsed, intfc.smc.Tx().GasLimit(), types.Error{})
 	return
 }
 

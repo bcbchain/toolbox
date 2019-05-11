@@ -26,7 +26,7 @@ func call(name, password, orgName, contractName, methodName, file, params, split
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return err
@@ -39,9 +39,13 @@ func blockHeight(chainID string) error {
 		Error(fmt.Sprintf("Query Block Height failed, %v", err.Error()))
 		return err
 	}
+	if blkHeight.LastBlock == 0 {
+		fmt.Println(" BlockHeight query failed. Please check the input parameters")
+		return err
+	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&blkHeight, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&blkHeight, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return nil
@@ -70,7 +74,7 @@ func block(chainID, height string) error {
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&blk, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&blk, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return nil
@@ -85,7 +89,7 @@ func transaction(chainID, txHash string) error {
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&tx, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&tx, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return nil
@@ -105,7 +109,7 @@ func balance(accAddress types.Address, name, password, tokenName, allStr string,
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return nil
@@ -124,7 +128,7 @@ func nonce(accAddress types.Address, name, password, chainID, keyStorePath strin
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return nil
@@ -139,7 +143,7 @@ func commitTx(chainID, tx string) error {
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return nil
@@ -153,7 +157,7 @@ func versionF() error {
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return nil
@@ -186,7 +190,7 @@ func deployContract(name, password, contractName, version, orgName, codeFile,
 	Version[name] = append(Version[name], version)
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return err
@@ -214,7 +218,7 @@ func registerToken(name, password, tokenName, tokenSymbol, totalSupply, gasPrice
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return err
@@ -236,7 +240,7 @@ func registerOrg(name, password, orgName, gasLimit, note, keyStorePath, chainID 
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return err
@@ -259,7 +263,7 @@ func setOrgSigners(name, password, orgName, pubKeys, gasLimit, note, keyStorePat
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return err
@@ -282,7 +286,7 @@ func setOrgDeployer(name, password, orgName, deployer, gasLimit, note, keyStoreP
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return err
@@ -306,7 +310,7 @@ func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, ch
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "\t")
+	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
 	fmt.Printf("Response: %s\n", string(jsIndent))
 
 	return err
@@ -408,11 +412,11 @@ func ContractInfo(orgName, contractName, orgID, contractAddr string) (err error)
 		if err != nil {
 			Error(err.Error())
 		}
-
+		fmt.Println("OK")
+		fmt.Println("Response:")
 		for _, v := range ContractAddrList {
-			fmt.Println("OK")
-			jsIndent, _ := json.MarshalIndent(&v, "", "\t")
-			fmt.Printf("Response: %s\n", string(jsIndent))
+			jsIndent, _ := json.MarshalIndent(&v, "", "  ")
+			fmt.Printf("  %s\n", string(jsIndent))
 		}
 	} else {
 		fmt.Println("Insufficient input parameters")
@@ -424,35 +428,34 @@ func ContractInfo(orgName, contractName, orgID, contractAddr string) (err error)
 
 func ParamsExample(contract *std.Contract) (err error) {
 
-	address, _ := json.MarshalIndent(&contract.Address, "", "\t")
-	account, _ := json.MarshalIndent(&contract.Account, "", "\t")
-	orgid, _ := json.MarshalIndent(&contract.OrgID, "", "\t")
-	name, _ := json.MarshalIndent(&contract.Name, "", "\t")
-	owner, _ := json.MarshalIndent(&contract.Owner, "", "\t")
-	codeHash, _ := json.MarshalIndent(&contract.CodeHash, "", "\t")
-	version, _ := json.MarshalIndent(&contract.Version, "", "\t")
-	//version = strings.Join(versionList, ",")
-	EffectHeight, _ := json.MarshalIndent(&contract.EffectHeight, "", "\t")
-	loseEffect, _ := json.MarshalIndent(&contract.LoseHeight, "", "\t")
-	keyPrefix, _ := json.MarshalIndent(&contract.KeyPrefix, "", "\t")
-	interfaces, _ := json.MarshalIndent(&contract.Interfaces, "", "\t")
-	token, _ := json.MarshalIndent(&contract.Token, "", "\t")
+	address, _ := json.MarshalIndent(&contract.Address, "", "  ")
+	account, _ := json.MarshalIndent(&contract.Account, "", "  ")
+	orgid, _ := json.MarshalIndent(&contract.OrgID, "", "  ")
+	name, _ := json.MarshalIndent(&contract.Name, "", "  ")
+	owner, _ := json.MarshalIndent(&contract.Owner, "", "  ")
+	codeHash, _ := json.MarshalIndent(&contract.CodeHash, "", "  ")
+	version, _ := json.MarshalIndent(&contract.Version, "", "  ")
+	EffectHeight, _ := json.MarshalIndent(&contract.EffectHeight, "", "  ")
+	loseEffect, _ := json.MarshalIndent(&contract.LoseHeight, "", "  ")
+	keyPrefix, _ := json.MarshalIndent(&contract.KeyPrefix, "", "  ")
+	interfaces, _ := json.MarshalIndent(&contract.Interfaces, "", "  ")
+	token, _ := json.MarshalIndent(&contract.Token, "", "  ")
 
 	fmt.Println("OK")
 	fmt.Printf("Response: \n")
-	fmt.Printf("    Version: %s\n", string(version))
-	fmt.Printf("    Name: %s\n", string(name))
-	fmt.Printf("    OrgID: %s\n", string(orgid))
-	fmt.Printf("    Address: %s\n", string(address))
-	fmt.Printf("    Account: %s\n", string(account))
-	fmt.Printf("    Owner: %s\n", string(owner))
-	fmt.Printf("    CodeHash: %s\n", string(codeHash))
-	fmt.Printf("    EffectHeight: %s\n", string(EffectHeight))
-	fmt.Printf("    LoseHeight: %s\n", string(loseEffect))
-	fmt.Printf("    KeyPrefix: %s\n", string(keyPrefix))
-	fmt.Printf("    Token: %s\n", string(token))
-	fmt.Printf("    Interfaces: %s\n", string(interfaces))
-	fmt.Printf("    Method: \n")
+	fmt.Printf("  Version: %s\n", string(version))
+	fmt.Printf("  Name: %s\n", string(name))
+	fmt.Printf("  OrgID: %s\n", string(orgid))
+	fmt.Printf("  Address: %s\n", string(address))
+	fmt.Printf("  Account: %s\n", string(account))
+	fmt.Printf("  Owner: %s\n", string(owner))
+	fmt.Printf("  CodeHash: %s\n", string(codeHash))
+	fmt.Printf("  EffectHeight: %s\n", string(EffectHeight))
+	fmt.Printf("  LoseHeight: %s\n", string(loseEffect))
+	fmt.Printf("  KeyPrefix: %s\n", string(keyPrefix))
+	fmt.Printf("  Token: %s\n", string(token))
+	fmt.Printf("  Interfaces: %s\n", string(interfaces))
+	fmt.Printf("  Method: \n")
 
 	var example2 = ""
 	for _, v := range contract.Methods {
@@ -468,7 +471,7 @@ func ParamsExample(contract *std.Contract) (err error) {
 			example2 = strings.Join(example, "@")
 		}
 
-		fmt.Printf("          %s\n          Params： %s\n\n", v.ProtoType, example2)
+		fmt.Printf("    %s\n    Params： %s\n\n", v.ProtoType, example2)
 	}
 
 	fmt.Println("PS: If the string is just a string, Example: \"example\"\n " +

@@ -74,7 +74,7 @@ func updateWal(keyStorePath, walName, walV1Password, walV2Password string) error
 		Error(err.Error())
 	}
 
-	_, err = wal.ImportAccount(keyStorePath, walName, walV2Password, acct1.PrivKey)
+	_, err = wal.ImportAccount(keyStorePath, walName+"_new", walV2Password, acct1.PrivKey)
 	if err != nil {
 		Error(err.Error())
 	}

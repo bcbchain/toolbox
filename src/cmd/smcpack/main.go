@@ -53,7 +53,7 @@ func Execute() error {
 }
 
 func addFlags() {
-	RootCmd.PersistentFlags().StringVarP(&keyStorePath, "keystore", "k", "", "path of key store")
+	RootCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", "", "path of key store")
 	RootCmd.PersistentFlags().StringVarP(&walName, "name", "n", "", "name of wallet")
 	RootCmd.PersistentFlags().StringVarP(&walPassword, "password", "p", "", "password of wallet")
 	RootCmd.PersistentFlags().StringVarP(&smcPath, "path", "s", "", "path of smart contract")

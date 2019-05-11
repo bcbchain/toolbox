@@ -2,6 +2,7 @@ package core
 
 import (
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+	"github.com/tendermint/tendermint/version"
 )
 
 // Get node health. Returns empty result (200 OK) on success, no response - in
@@ -27,5 +28,12 @@ import (
 // }
 // ```
 func Health() (*ctypes.ResultHealth, error) {
-	return &ctypes.ResultHealth{}, nil
+	state := consensusState.GetState()
+
+	return &ctypes.ResultHealth{
+		ChainID:         genDoc.ChainID,
+		Version:         version.Version,
+		ChainVersion:    state.ChainVersion,
+		LastBlockHeight: state.LastBlockHeight,
+		ValidatorCount:  int64(len(state.Validators.Validators))}, nil
 }

@@ -123,7 +123,7 @@ func GenesisDocFromFile(config *cfg.Config) (*GenesisDoc, error) {
 	genesisFile := config.GenesisFile()
 
 	//verify signature
-	signatureFile := genesisFile[0:len(genesisFile)-5] + "-signature.json"
+	signatureFile := genesisFile[0:len(genesisFile)-5] + ".json.sig"
 	_, err := sig.VerifyTextFile(genesisFile, signatureFile)
 	if err != nil {
 		return nil, cmn.ErrorWrap(err, cmn.Fmt("Genesis file verify failed, %v", err.Error()))

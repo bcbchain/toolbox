@@ -56,7 +56,7 @@ func DoHttpQueryAndParse(nodeAddrSlice []string, key string, data interface{}) (
 	}
 
 	if len(value) == 0 {
-		return errors.New("return value is empty, please check key")
+		return errors.New("return value is empty, please check key=" + key)
 	}
 
 	err = json.Unmarshal(value, data)

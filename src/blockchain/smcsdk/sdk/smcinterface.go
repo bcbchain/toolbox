@@ -43,7 +43,7 @@ type IMessage interface {
 	Origins() []types.Address      //消息完整的调用链（用于记录跨合约调用的合约链）
 	InputReceipts() []types.KVPair //级联消息中前一个消息输出的收据作为本次消息的输入
 
-	GetTransferToMe(tokenName string) *std.Transfer //获取级联消息中前一个消息中第一个转给现在这个合约的转账收据
+	GetTransferToMe() []*std.Transfer //获取级联消息中前一个消息中第一个转给现在这个合约的转账收据
 }
 
 // IAccount the interface for Account
@@ -236,6 +236,12 @@ type IStateHelper interface {
 	SetBools(key string, v []bool)
 	SetStrings(key string, v []string)
 
+	// Flush cache data to bcchain
+	Flush()
+
+	// Delete data map by key
+	Delete(key string)
+
 	//Memory cache McGet
 	McGet(key string, defaultValue interface{}) interface{}   //从状态数据库或内存缓存中读取指定KEY对应的数据，不存在返回空
 	McGetEx(key string, defaultValue interface{}) interface{} //从状态数据库或内存缓存中读取指定KEY对应的数据，不存在返回默认值
@@ -311,8 +317,11 @@ type IStateHelper interface {
 	McSetBools(key string, v []bool)
 	McSetStrings(key string, v []string)
 
+	// McClear dirty Memory cache data map by key
 	McClear(key string)
-	Flush()
+
+	// McDelete dirty and delete data map by key
+	McDelete(key string)
 }
 
 // ISmartContract the interface for SmartContract

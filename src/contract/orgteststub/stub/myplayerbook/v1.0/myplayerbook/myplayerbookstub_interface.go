@@ -34,7 +34,6 @@ func (inter *IntfcPlayerBookStub) SetSdk(smc sdk.ISmartContract) {
 
 //Invoke invoke function
 func (inter *IntfcPlayerBookStub) Invoke(methodID string, p interface{}) types2.Response {
-	// TODO 扣手续费
 	// stub里生成燃料收据（不扣费），但是要检查账户余额是否足够支付燃料消耗，交易完成后GIChain根据燃料收据合并为一条手续费收据，并生成手续费转账交易，执行手续费扣费。
 	// 跨合约调用的燃料费由Sender支付
 	switch methodID {
@@ -63,7 +62,6 @@ func (inter *IntfcPlayerBookStub) coreGetPlayer(p int64) types2.Response {
 	if err != nil {
 		panic(err)
 	}
-	//TODO: ??????
 	response.Data = string(b)
 
 	return response

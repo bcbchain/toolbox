@@ -43,6 +43,14 @@ func TxParse(txString string) (tx types.Transaction, pubKey crypto.PubKeyEd25519
 	//RLP解码Transaction结构
 	reader = bytes.NewReader(txData)
 	err = rlp.Decode(reader, &tx)
+	if len(tx.Messages) > 2 {
+		err = errors.New("Up to two messages at one time")
+		return
+	}
+	if len(tx.Messages) == 0 {
+		err = errors.New("no message in transaction")
+		return
+	}
 	return
 }
 

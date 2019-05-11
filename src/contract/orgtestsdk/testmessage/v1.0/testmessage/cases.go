@@ -195,5 +195,5 @@ func (t *TestMessage) testInputReceipts() {
 }
 
 func (t *TestMessage) testGetTransferToMe() {
-	fmt.Println(t.sdk.Message().GetTransferToMe("testt"))
+	fmt.Println(t.sdk.Message().GetTransferToMe())
 }

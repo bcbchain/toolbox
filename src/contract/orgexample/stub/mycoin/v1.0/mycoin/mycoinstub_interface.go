@@ -1,64 +1,74 @@
-package mycoin
+package mycoinstub
 
 import (
-	"reflect"
+	bcType "blockchain/types"
 
 	"blockchain/smcsdk/sdk"
-	"blockchain/smcsdk/sdk/bn"
 	"blockchain/smcsdk/sdk/types"
-	types2 "blockchain/types"
-	stubTypes "contract/stubcommon/types"
+	"contract/stubcommon/common"
+	stubType "contract/stubcommon/types"
+	tmcommon "github.com/tendermint/tmlibs/common"
 
-	mycoin_v1_0 "contract/orgexample/code/mycoin/v1.0/mycoin"
+	"contract/orgexample/code/mycoin/v1.0/mycoin"
 )
 
-type IntfcCoinStub struct {
-	smcApi sdk.ISmartContract
+//InterfaceMycoinStub interface stub
+type InterfaceMycoinStub struct {
+	smc sdk.ISmartContract
 }
 
-var _ stubTypes.IContractIntfcStub = (*IntfcCoinStub)(nil)
+var _ stubType.IContractIntfcStub = (*InterfaceMycoinStub)(nil)
 
-func NewIntfcStub(smcApi sdk.ISmartContract) stubTypes.IContractIntfcStub {
-	return &IntfcCoinStub{smcApi: smcApi}
+//NewInterStub new interface stub
+func NewInterStub(smc sdk.ISmartContract) stubType.IContractIntfcStub {
+	return &InterfaceMycoinStub{smc: smc}
 }
 
-func (inter *IntfcCoinStub) GetSdk() sdk.ISmartContract {
-	return inter.smcApi
+//GetSdk get sdk
+func (inter *InterfaceMycoinStub) GetSdk() sdk.ISmartContract {
+	return inter.smc
 }
 
-func (inter *IntfcCoinStub) SetSdk(smc sdk.ISmartContract) {
-	inter.smcApi = smc
+//SetSdk set sdk
+func (inter *InterfaceMycoinStub) SetSdk(smc sdk.ISmartContract) {
+	inter.smc = smc
 }
 
-func (inter *IntfcCoinStub) Invoke(methodID string, p interface{}) types2.Response {
-	// TODO 扣手续费
-	//
+//Invoke invoke function
+func (inter *InterfaceMycoinStub) Invoke(methodID string, p interface{}) (response bcType.Response) {
+	defer FuncRecover(&response)
+
+	if len(inter.smc.Message().Origins()) > 8 {
+		response.Code = types.ErrStubDefined
+		response.Log = "invoke contract's interface steps beyond 8 step"
+		return
+	}
+
+	// 生成手续费收据
+	fee, gasUsed, feeReceipt, err := common.FeeAndReceipt(inter.smc, false)
+	response.Fee = fee
+	response.GasUsed = gasUsed
+	response.Tags = append(response.Tags, tmcommon.KVPair{Key: feeReceipt.Key, Value: feeReceipt.Value})
+	if err.ErrorCode != types.CodeOK {
+		response = common.CreateResponse(inter.smc.Message(), response.Tags, "", fee, gasUsed, inter.smc.Tx().GasLimit(), err)
+		return
+	}
+
+	var data string
+	err = types.Error{ErrorCode: types.CodeOK}
 	switch methodID {
-	case "23445656":
-		return inter.core_transfer(p)
+	case "44d8ca60": // prototype: Transfer(types.Address,bn.Number)
+		inter.transfer(p)
+	default:
+		err.ErrorCode = types.ErrInvalidMethod
 	}
-	return types2.Response{}
+	response = common.CreateResponse(inter.smc.Message(), nil, data, fee, gasUsed, inter.smc.Tx().GasLimit(), err)
+	return
 }
 
-func (inter *IntfcCoinStub) core_transfer(p interface{}) types2.Response {
-	response := types2.Response{}
-
-	param := reflect.ValueOf(p).Elem()
-	if param.NumField() != 2 {
-		smcError := types.Error{types.ErrInvalidParameter, ""}
-		response.Code = smcError.ErrorCode
-		response.Log = smcError.Error()
-		return response
-	}
-
-	to := param.Field(0).Interface().(types.Address)
-	value := param.Field(1).Interface().(bn.Number)
-	sdk.RequireAddress(inter.GetSdk(), to)
-
-	coin := new(mycoin_v1_0.Mycoin)
-	coin.SetSdk(inter.smcApi)
-
-	coin.Transfer(to, value)
-
-	return response
+func (inter *InterfaceMycoinStub) transfer(p interface{}) {
+	contractObj := new(mycoin.Mycoin)
+	contractObj.SetSdk(inter.smc)
+	param := p.(mycoin.TransferParam)
+	contractObj.Transfer(param.To, param.Value)
 }

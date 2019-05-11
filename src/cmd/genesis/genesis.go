@@ -213,6 +213,9 @@ func genesis(chainID, password, pathOfCharter, pathOfOutput string) error {
 	if pathOfOutput == "" {
 		return errors.New("Need path of output genesis files")
 	}
+	if _, err := fs.MakeDir(pathOfOutput); err != nil {
+		Error(err.Error())
+	}
 
 	CheckInputFileExist(chainID, pathOfCharter)
 	ownerAcct := LoadOwnerAccountFile(chainID, pathOfCharter)

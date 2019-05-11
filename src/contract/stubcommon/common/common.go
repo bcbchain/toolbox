@@ -14,16 +14,27 @@ import (
 	"math"
 	"reflect"
 	"strings"
+
+	"github.com/tendermint/tmlibs/common"
 )
 
-// TODO 这个stub 只是为了genesis合约，其他合约不适用！！！
 //CreateResponse create response data
-//TODO: Fee 和 gasUsed 只是本合约调用消耗的gas， 跨合约调用消耗的无法获取到，
-//       建议此处不赋值，而是由gichain根据gaslimit-gasused计算出总的gasUsed.
-func CreateResponse(message sdk.IMessage, data string, fee, gasUsed, gasLimit int64) (response types2.Response) {
-	response.Code = types.CodeOK
+func CreateResponse(message sdk.IMessage, oriTags []common.KVPair, data string, fee, gasUsed, gasLimit int64, err types.Error) (response types2.Response) {
+	response.Code = err.ErrorCode
 	response.Data = data
+	response.Fee = fee
+	response.Log = err.Error()
 	response.GasLimit = gasLimit
+	response.GasUsed = gasUsed
+	if oriTags != nil {
+		response.Tags = oriTags
+	}
+	for _, v := range message.(*object.Message).OutputReceipts() {
+		tag := common.KVPair{}
+		tag.Value = v.Value
+		tag.Key = v.Key
+		response.Tags = append(response.Tags, tag)
+	}
 	return
 }
 
@@ -75,6 +86,7 @@ func FeeAndReceipt(smc sdk.ISmartContract, bMethod bool) (fee, gasUsed int64, re
 	if balance.IsLessThanI(fee) {
 		fee = balance.V.Int64()
 		balance = bn.N(0)
+		gasUsed = fee / gasprice
 		err.ErrorCode = types.ErrInsufficientBalance
 	} else {
 		balance = balance.SubI(fee)
@@ -99,7 +111,7 @@ func CalcKey(name, version string) string {
 	if strings.HasPrefix(name, "token-template-") {
 		name = "token-issue"
 	}
-	return name + "_" + strings.Replace(version, ".", "_", -1)
+	return name + strings.Replace(version, ".", "", -1)
 }
 
 func emitFeeReceipt(smc sdk.ISmartContract, receipt std.Fee) types.KVPair {

@@ -44,6 +44,7 @@ const (
 const (
 	// minimum of user code
 	ErrUserDefined = 55000 + iota
+	ErrExpireContract
 )
 
 var errStrings map[uint32]string
@@ -68,4 +69,7 @@ func init() {
 	errStrings[ErrInsufficientBalance] = "Insufficient balance"
 	errStrings[ErrInvalidMethod] = "Invalid method"
 	errStrings[ErrUserDefined] = "Error user defined"
+
+	// user code
+	errStrings[ErrExpireContract] = "The contract has expired"
 }

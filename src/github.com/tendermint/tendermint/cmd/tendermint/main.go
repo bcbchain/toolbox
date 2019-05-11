@@ -1,21 +1,25 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/tendermint/tmlibs/cli"
 
+	_ "net/http/pprof"
+
 	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
 	cfg "github.com/tendermint/tendermint/config"
 	nm "github.com/tendermint/tendermint/node"
-	_ "net/http/pprof"
 )
 
 func main() {
 	go func() {
-		http.ListenAndServe(":2020", nil)
+		if e := http.ListenAndServe(":2020", nil); e != nil {
+			fmt.Println("pprof can't start!!!")
+		}
 	}()
 
 	cmd.AddInitFlags(cmd.InitFilesCmd)

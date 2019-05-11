@@ -456,7 +456,7 @@ func (h *Handshaker) replayBlock(state sm.State, height int64, proxyApp proxy.Ap
 func checkBlockAppHash(appHash, blockAppHash []byte, height int64) error {
 
 	if !bytes.Equal(blockAppHash, appHash) {
-		panic(fmt.Errorf(" Replay block  AppHash does not match Tendermint next block.AppHash  after replay. Got %X, expected %X, height %X", appHash, blockAppHash, height).Error())
+		panic(fmt.Errorf(" Replay block  AppHash does not match Tendermint next block.AppHash  after replay. Got:%X, expected:%X, height:%d", appHash, blockAppHash, height).Error())
 	}
 	return nil
 }

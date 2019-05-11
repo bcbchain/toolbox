@@ -1,6 +1,7 @@
 package mycrossmc
 
 import (
+	"blockchain/smcsdk/sdk"
 	"blockchain/smcsdk/sdk/bn"
 	"blockchain/smcsdk/sdk/types"
 	"blockchain/smcsdk/sdkimpl/object"
@@ -20,7 +21,7 @@ type InterfaceStub struct {
 
 const importContractName = "myplayerbook"
 
-func (s *MyCrossmc) myplayerbookStub() *InterfaceStub {
+func (s *MyCrossmc) myplayerbook() *InterfaceStub {
 	return &InterfaceStub{myplayerbook3.NewInterfaceStub(s.GetSdk(), importContractName)}
 }
 
@@ -32,6 +33,8 @@ func (intfc *InterfaceStub) RegisterName(index int64, plyr Player) {
 	defer intfc.stub.SetSdk(oldSmc)
 	//合约调用时的输入收据，同时可作为跨合约调用的输入收据
 	contract := oldSmc.Helper().ContractHelper().ContractOfName(importContractName)
+	sdk.Require(contract != nil, types.ErrExpireContract, "")
+
 	newSmc := sdkhelper.OriginNewMessage(oldSmc, contract, methodID, oldSmc.Message().(*object.Message).OutputReceipts())
 	intfc.stub.SetSdk(newSmc)
 

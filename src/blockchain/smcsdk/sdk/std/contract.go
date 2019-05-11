@@ -39,7 +39,7 @@ type OrgDeveloper struct {
 type Method struct {
 	MethodID  string `json:"methodId"`  //方法ID
 	Gas       int64  `json:"gas"`       //方法需要消耗的燃料
-	ProtoType string `json:"protoType"` //方法原型
+	ProtoType string `json:"prototype"` //方法原型
 }
 
 // Contract contract detail information

@@ -1,6 +1,7 @@
 package mempool
 
 import (
+	"blockchain/algorithm"
 	"bytes"
 	"container/list"
 	"github.com/tendermint/tendermint/proxy"
@@ -273,6 +274,7 @@ func (mem *Mempool) resCbNormal(req *abci.Request, res *abci.Response) {
 	switch r := res.Value.(type) {
 	case *abci.Response_CheckTx:
 		tx := req.GetCheckTx().Tx
+		mem.GiTxCache(cmn.HexBytes(algorithm.CalcCodeHash(string(tx))), res.GetCheckTx())
 		if r.CheckTx.Code == abci.CodeTypeOK {
 			mem.counter++
 			memTx := &mempoolTx{
@@ -305,6 +307,7 @@ func (mem *Mempool) resCbRecheck(req *abci.Request, res *abci.Response) {
 			cmn.PanicSanity(cmn.Fmt("Unexpected tx response from proxy during recheck\n"+
 				"Expected %X, got %X", r.CheckTx.Data, memTx.tx))
 		}
+		mem.GiTxCache(cmn.HexBytes(algorithm.CalcCodeHash(string(memTx.tx))), res.GetCheckTx())
 		if r.CheckTx.Code == abci.CodeTypeOK {
 			// Good, nothing to do.
 		} else {

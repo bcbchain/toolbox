@@ -51,7 +51,8 @@ func (pb *MyPlayerBook) GetPlayer(addr types.Address) string {
 func (pb *MyPlayerBook) RegisterName(index int64, plyr Player) {
 
 	var a myType
-	//TODO: 检查收据，确认已支付注册费
+
+	// 检查收据，确认已支付注册费
 	sdk.Require(a.bRegistrationFee(pb.sdk.Message()) == true,
 		types.ErrUserDefined, "")
 
@@ -71,9 +72,11 @@ func (pb *MyPlayerBook) MultiTypesParam(index uint64, flt float64, bl bool, bt b
 }
 
 func (m *myType) bRegistrationFee(smcAPI sdk.IMessage) bool {
-	feeReceipt := smcAPI.GetTransferToMe("LOC")
-	if feeReceipt != nil && feeReceipt.Value.CmpI(registrationFee) >= 0 {
-		return true
+	feeReceipts := smcAPI.GetTransferToMe()
+	for _, feeReceipt := range feeReceipts {
+		if feeReceipt != nil && feeReceipt.Value.CmpI(registrationFee) >= 0 {
+			return true
+		}
 	}
 	return false
 }

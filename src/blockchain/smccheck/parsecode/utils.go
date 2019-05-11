@@ -338,3 +338,26 @@ func FilterImports(importPath string) bool {
 
 	return true
 }
+
+// IsStarValueInType check the parameter's type,
+// return true if it's star or map's value is star,
+// else return false
+func IsStarValueInType(f Field) bool {
+	if _, ok := f.FieldType.(*ast.StarExpr); ok {
+		return true
+	}
+
+	if m, ok := f.FieldType.(*ast.MapType); ok {
+		if m1, ok := m.Value.(*ast.MapType); ok {
+			_, ok = m1.Value.(*ast.StarExpr)
+
+			return ok
+		} else {
+			_, ok = m.Value.(*ast.StarExpr)
+
+			return ok
+		}
+	}
+
+	return false
+}

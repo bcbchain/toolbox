@@ -2,16 +2,14 @@ package common
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
+
+	"gopkg.in/yaml.v2"
 )
 
 type BccConfig struct {
-	DefaultChainID string   `yaml:"defaultChainID"`
-	Bcb            []string `yaml:"bcb"`
-	Bcbtest        []string `yaml:"bcbtest"`
-	Devtest        []string `yaml:"devtest"`
-	Local          []string `yaml:"local"`
+	DefaultChainID string              `yaml:"defaultChainID"`
+	Urls           map[string][]string `yaml:"urls"`
 }
 
 type BccRPCServiceConfig struct {

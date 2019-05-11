@@ -69,9 +69,9 @@ func Gen(contractDir string, contractInfoList []gen.ContractInfo) (results []std
 		}
 
 		for _, res := range totalResList {
-			if res.ImportContract != "" {
+			for index := range res.ImportContracts {
 				inPath := filepath.Join(filepath.Join(filepath.Join(codePath, res.DirectionName), "v"+res.Version), res.DirectionName)
-				er = gen.GenImport(inPath, res, totalResList, contractInfoList)
+				er = gen.GenImport(inPath, res, totalResList, contractInfoList, index)
 				if er != nil {
 					err.ErrorCode = types.ErrInvalidParameter
 					err.ErrorDesc = er.Error()

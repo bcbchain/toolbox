@@ -28,7 +28,7 @@ func Create(method std.Method, params, splitBy string) (results []interface{}, e
 	splitTypes := strings.Split(method.ProtoType[leftBracketIndex+1:rightBracketIndex], ",")
 
 	if len(splitTypes) != len(splitValues) {
-		return nil, errors.New(fmt.Sprintf("types count=%d, values count=%d", len(splitTypes), len(splitValues)))
+		return nil, errors.New(fmt.Sprintf("expect parameter's count=%d, obtain count=%d", len(splitTypes), len(splitValues)))
 	}
 
 	for index, typeStr := range splitTypes {

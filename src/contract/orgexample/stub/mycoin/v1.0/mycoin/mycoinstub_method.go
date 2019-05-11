@@ -1,69 +1,105 @@
-package mycoin
+package mycoinstub
 
 import (
+	bcType "blockchain/types"
+
 	"blockchain/smcsdk/sdk"
+	"blockchain/smcsdk/sdk/types"
+	"contract/stubcommon/common"
+	stubType "contract/stubcommon/types"
+	tmcommon "github.com/tendermint/tmlibs/common"
+
 	"blockchain/smcsdk/sdk/bn"
 	"blockchain/smcsdk/sdk/rlp"
-	sdktypes "blockchain/smcsdk/sdk/types"
-	"blockchain/types"
-	stubTypes "contract/stubcommon/types"
-
+	"contract/orgexample/code/mycoin/v1.0/mycoin"
 	"github.com/tendermint/tmlibs/log"
 )
 
-type CoinStub struct {
+//MycoinStub an object
+type MycoinStub struct {
 	logger log.Logger
 }
 
-var _ stubTypes.IContractStub = (*CoinStub)(nil)
+var _ stubType.IContractStub = (*MycoinStub)(nil)
 
-func New(logger log.Logger) stubTypes.IContractStub {
-
-	var stub CoinStub
-	stub.logger = logger
-
-	return &stub
+//New generate a stub
+func New(logger log.Logger) stubType.IContractStub {
+	return &MycoinStub{logger: logger}
 }
 
-func (mc *CoinStub) Invoke(smcApi sdk.ISmartContract) types.Response {
-
-	// TODO 手续费
-	switch smcApi.Message().MethodID() {
-	case "23445656":
-		return transfer(smcApi)
+//FuncRecover recover panic by Assert
+func FuncRecover(response *bcType.Response) {
+	if err := recover(); err != nil {
+		if _, ok := err.(types.Error); ok {
+			error := err.(types.Error)
+			response.Code = error.ErrorCode
+			response.Log = error.Error()
+		} else {
+			panic(err)
+		}
 	}
-	return types.Response{}
 }
 
-func transfer(smcApi sdk.ISmartContract) (response types.Response) {
+// InitChain initial smart contract
+func (pbs *MycoinStub) InitChain(smc sdk.ISmartContract) (response bcType.Response) {
+	defer FuncRecover(&response)
 
-	itemsBytes := smcApi.Message().Items()
+	contractObj := new(mycoin.Mycoin)
+	contractObj.SetSdk(smc)
+	contractObj.InitChain()
 
-	if len(itemsBytes) != 2 {
-		response.Code = sdktypes.ErrStubDefined
-		response.Log = "Message can not be nil."
+	response.Code = types.CodeOK
+	return response
+}
 
-		return response
+// UpdateChain update smart contract
+func (pbs *MycoinStub) UpdateChain(smc sdk.ISmartContract) (response bcType.Response) {
+	defer FuncRecover(&response)
+
+	response.Code = types.CodeOK
+	return response
+}
+
+//Invoke invoke function
+func (pbs *MycoinStub) Invoke(smc sdk.ISmartContract) (response bcType.Response) {
+	defer FuncRecover(&response)
+
+	// 生成手续费收据
+	fee, gasUsed, feeReceipt, err := common.FeeAndReceipt(smc, true)
+	response.Fee = fee
+	response.GasUsed = gasUsed
+	response.Tags = append(response.Tags, tmcommon.KVPair{Key: feeReceipt.Key, Value: feeReceipt.Value})
+	if err.ErrorCode != types.CodeOK {
+		response = common.CreateResponse(smc.Message(), response.Tags, "", fee, gasUsed, smc.Tx().GasLimit(), err)
+		return
 	}
 
-	type paramTransfer struct {
-		to    types.Address
-		value bn.Number
+	var data string
+	err = types.Error{ErrorCode: types.CodeOK}
+	switch smc.Message().MethodID() {
+	case "44d8ca60": // prototype: Transfer(types.Address,bn.Number)
+		transfer(smc)
+	default:
+		err.ErrorCode = types.ErrInvalidMethod
 	}
-	param := paramTransfer{}
-	if err := rlp.DecodeBytes(itemsBytes[0], param.to); err != nil {
-		response.Code = sdktypes.ErrStubDefined
-		response.Log = err.Error()
+	response = common.CreateResponse(smc.Message(), response.Tags, data, fee, gasUsed, smc.Tx().GasLimit(), err)
+	return
+}
 
-		return response
-	}
+func transfer(smc sdk.ISmartContract) {
+	items := smc.Message().Items()
+	sdk.Require(len(items) == 2, types.ErrStubDefined, "Invalid message data")
+	var err error
 
-	if err := rlp.DecodeBytes(itemsBytes[1], param.value); err != nil {
-		response.Code = sdktypes.ErrStubDefined
-		response.Log = err.Error()
+	var v0 types.Address
+	err = rlp.DecodeBytes(items[0], &v0)
+	sdk.RequireNotError(err, types.ErrInvalidParameter)
 
-		return response
-	}
-	inter := IntfcCoinStub{smcApi}
-	return inter.core_transfer(&param)
+	var v1 bn.Number
+	err = rlp.DecodeBytes(items[1], &v1)
+	sdk.RequireNotError(err, types.ErrInvalidParameter)
+
+	contractObj := new(mycoin.Mycoin)
+	contractObj.SetSdk(smc)
+	contractObj.Transfer(v0, v1)
 }

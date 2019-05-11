@@ -23,19 +23,11 @@ func nodeAddrSlice(chainID string) []string {
 	if len(chainID) == 0 {
 		chainID = common.GetBCCConfig().DefaultChainID
 	}
-
-	switch chainID {
-	case "bcb":
-		return common.GetBCCConfig().Bcb
-	case "bcbtest":
-		return common.GetBCCConfig().Bcbtest
-	case "devtest":
-		return common.GetBCCConfig().Devtest
-	case "local":
-		return common.GetBCCConfig().Local
-	default:
-		return []string{}
+	if _, ok := common.GetBCCConfig().Urls[chainID]; ok {
+		return common.GetBCCConfig().Urls[chainID]
 	}
+
+	return []string{}
 }
 
 func getAccountPriKey(keyStorePath, name, password string) (priKeyHex string, err error) {

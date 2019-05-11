@@ -60,8 +60,8 @@ func (info NodeInfo) Validate() error {
 // CONTRACT: two nodes are compatible if the major/minor versions match and network match
 // and they have at least one channel in common.
 func (info NodeInfo) CompatibleWith(other NodeInfo) error {
-	iMajor, iMinor, _, iErr := splitVersion(info.Version)
-	oMajor, oMinor, _, oErr := splitVersion(other.Version)
+	iMajor, iMinor, _, iErr := splitVersion(info.BaseVersion) // 取的tendermint的版本号
+	oMajor, oMinor, _, oErr := splitVersion(other.BaseVersion)
 
 	// if our own version number is not formatted right, we messed up
 	if iErr != nil {
@@ -129,7 +129,7 @@ func (info NodeInfo) String() string {
 
 func splitVersion(version string) (string, string, string, error) {
 	spl := strings.Split(version, ".")
-	if len(spl) != 4 {
+	if len(spl) != 3 {
 		return "", "", "", fmt.Errorf("Invalid version format %v", version)
 	}
 	return spl[0], spl[1], spl[2], nil

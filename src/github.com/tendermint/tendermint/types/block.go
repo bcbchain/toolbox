@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/tendermint/tendermint/softforks"
+	"github.com/tendermint/tendermint/version"
 
 	"github.com/tendermint/abci/types"
 	"strings"
@@ -58,7 +59,6 @@ func GIMakeBlock(height int64, txs []Tx, commit *Commit, txHashList [][]byte,
 			LastAllocation:  lastAllocation,
 			ProposerAddress: proposer,
 			RewardAddress:   rewardAddr,
-			ChainVersion:    chainVersion,
 		},
 		LastCommit: commit,
 		Data: &Data{
@@ -74,6 +74,11 @@ func GIMakeBlock(height int64, txs []Tx, commit *Commit, txHashList [][]byte,
 			panic(e)
 		}
 		block.Header.RandomOfBlock = r
+	}
+	if chainVersion != 0 {
+		block.ChainVersion = &chainVersion
+		v := version.Version
+		block.Version = &v
 	}
 	block.fillHeader()
 	return block
@@ -244,9 +249,9 @@ type Header struct {
 	// added 06 August 2018
 	RandomOfBlock cmn.HexBytes `json:"random_of_block,omitempty"`
 	// version of block - added 14 Dec. 2018
-	Version string `json:"version,omitempty"`
+	Version *string `json:"version,omitempty"`
 	// added 26 Mar. 2019
-	ChainVersion int64 `json:"chain_version,omitempty"`
+	ChainVersion *int64 `json:"chain_version,omitempty"`
 }
 
 // Hash returns the hash of the header.
@@ -258,47 +263,36 @@ func (h *Header) Hash() cmn.HexBytes {
 		return nil
 	}
 	softforks.Init()
-	if softforks.IsForkForV1023233(h.Height) {
-		return merkle.SimpleHashFromMap(map[string]merkle.Hasher{
-			"ChainID":        aminoHasher(h.ChainID),
-			"Height":         aminoHasher(h.Height),
-			"Time":           aminoHasher(h.Time),
-			"NumTxs":         aminoHasher(h.NumTxs),
-			"TotalTxs":       aminoHasher(h.TotalTxs),
-			"LastBlockID":    aminoHasher(h.LastBlockID),
-			"LastCommit":     aminoHasher(h.LastCommitHash),
-			"Data":           aminoHasher(h.DataHash),
-			"Validators":     aminoHasher(h.ValidatorsHash),
-			"LastApp":        aminoHasher(h.LastAppHash),
-			"Consensus":      aminoHasher(h.ConsensusHash),
-			"Results":        aminoHasher(h.LastResultsHash),
-			"Evidence":       aminoHasher(h.EvidenceHash),
-			"LastFee":        aminoHasher(h.LastFee),
-			"LastAllocation": aminoHasher(h.LastAllocation),
-			"Proposer":       aminoHasher(h.ProposerAddress),
-			"RewardAddr":     aminoHasher(h.RewardAddress),
-			"RandomOfBlock":  aminoHasher(h.RandomOfBlock),
-		})
+	mapForHash := map[string]merkle.Hasher{
+		"ChainID":        aminoHasher(h.ChainID),
+		"Height":         aminoHasher(h.Height),
+		"Time":           aminoHasher(h.Time),
+		"NumTxs":         aminoHasher(h.NumTxs),
+		"TotalTxs":       aminoHasher(h.TotalTxs),
+		"LastBlockID":    aminoHasher(h.LastBlockID),
+		"LastCommit":     aminoHasher(h.LastCommitHash),
+		"Data":           aminoHasher(h.DataHash),
+		"Validators":     aminoHasher(h.ValidatorsHash),
+		"LastApp":        aminoHasher(h.LastAppHash),
+		"Consensus":      aminoHasher(h.ConsensusHash),
+		"Results":        aminoHasher(h.LastResultsHash),
+		"Evidence":       aminoHasher(h.EvidenceHash),
+		"LastFee":        aminoHasher(h.LastFee),
+		"LastAllocation": aminoHasher(h.LastAllocation),
+		"Proposer":       aminoHasher(h.ProposerAddress),
+		"RewardAddr":     aminoHasher(h.RewardAddress),
+	}
+
+	if h.ChainVersion != nil && *h.ChainVersion != 0 {
+		mapForHash["RandomOfBlock"] = aminoHasher(h.RandomOfBlock)
+		mapForHash["Version"] = aminoHasher(h.Version)
+		mapForHash["ChainVersion"] = aminoHasher(h.ChainVersion)
+		return merkle.SimpleHashFromMap(mapForHash)
+	} else if softforks.IsForkForV1023233(h.Height) {
+		mapForHash["RandomOfBlock"] = aminoHasher(h.RandomOfBlock)
+		return merkle.SimpleHashFromMap(mapForHash)
 	} else {
-		return merkle.SimpleHashFromMap(map[string]merkle.Hasher{
-			"ChainID":        aminoHasher(h.ChainID),
-			"Height":         aminoHasher(h.Height),
-			"Time":           aminoHasher(h.Time),
-			"NumTxs":         aminoHasher(h.NumTxs),
-			"TotalTxs":       aminoHasher(h.TotalTxs),
-			"LastBlockID":    aminoHasher(h.LastBlockID),
-			"LastCommit":     aminoHasher(h.LastCommitHash),
-			"Data":           aminoHasher(h.DataHash),
-			"Validators":     aminoHasher(h.ValidatorsHash),
-			"LastApp":        aminoHasher(h.LastAppHash),
-			"Consensus":      aminoHasher(h.ConsensusHash),
-			"Results":        aminoHasher(h.LastResultsHash),
-			"Evidence":       aminoHasher(h.EvidenceHash),
-			"LastFee":        aminoHasher(h.LastFee),
-			"LastAllocation": aminoHasher(h.LastAllocation),
-			"Proposer":       aminoHasher(h.ProposerAddress),
-			"RewardAddr":     aminoHasher(h.RewardAddress),
-		})
+		return merkle.SimpleHashFromMap(mapForHash)
 	}
 }
 
@@ -321,6 +315,16 @@ func (h *Header) StringIndented(indent string) string {
 	if h == nil {
 		return "nil-Header"
 	}
+	v := ""
+	chainVersion := int64(0)
+	if h.Version != nil {
+		v = *h.Version
+	}
+
+	if h.ChainVersion != nil {
+		chainVersion = *h.ChainVersion
+	}
+
 	return fmt.Sprintf(`Header{
 %s  ChainID:        %v
 %s  Height:         %v
@@ -340,6 +344,8 @@ func (h *Header) StringIndented(indent string) string {
 %s  Proposer:       %v
 %s  RewardAddr:     %v
 %s  RandomOfBlock:  %v
+%s  Version:		%v
+%s  ChainVersion:	%v
 %s}#%v`,
 		indent, h.ChainID,
 		indent, h.Height,
@@ -359,6 +365,8 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.ProposerAddress,
 		indent, h.RewardAddress,
 		indent, h.RandomOfBlock,
+		indent, v,
+		indent, chainVersion,
 		indent, h.Hash())
 }
 

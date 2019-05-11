@@ -1,6 +1,7 @@
 package parsecode
 
 import (
+	"blockchain/smcsdk/sdk/types"
 	"bytes"
 	"fmt"
 	"go/ast"
@@ -10,8 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
-
-	"blockchain/smcsdk/sdk/types"
+	"unicode/utf8"
 )
 
 // Check 分析该目录下的合约代码，进行各种规范检查，提取关键信息
@@ -33,9 +33,14 @@ func Check(inPath string) (res *Result, err types.Error) {
 
 	v := newVisitor()
 	for _, pkg := range pkgMap {
-		//fmt.Println(pkgName)
-		for _, node := range pkg.Files {
-			//fmt.Println(fName)
+		for path, node := range pkg.Files {
+			// 判断是否符合utf-8要求
+			if !isUTF8Encode(path) {
+				err.ErrorCode = 500
+				err.ErrorDesc = "parse failed, contract file encode not utf8"
+				return
+			}
+
 			ast.Walk(v, node)
 			importsCollector(v.res)
 		}
@@ -58,16 +63,6 @@ func Check(inPath string) (res *Result, err types.Error) {
 		return
 	}
 	res = v.res
-
-	//if err0 = genSDK(inPath, v.res); err0 != nil {
-	//	ErrorTransfer(err0, &err)
-	//}
-	//if err0 = genReceipt(inPath, v.res); err0 != nil {
-	//	ErrorTransfer(err0, &err)
-	//}
-	//if err0 = genStore(inPath, v.res); err0 != nil {
-	//	ErrorTransfer(err0, &err)
-	//}
 
 	return
 }
@@ -92,9 +87,31 @@ func checkImportConflict(res *Result) {
 				res.ErrorDesc = append(res.ErrorDesc, "Import conflict:"+imp.Name+" has more than one path:"+imp.Path+","+im.Path)
 				res.ErrorPos = append(res.ErrorPos, 0)
 			}
-			// TODO alias name is in other path
 		}
 	}
+}
+
+func isUTF8Encode(path string) bool {
+	resBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return false
+	}
+
+	// mod-header
+	if resBytes[0] == 0xFE && resBytes[1] == 0xFF {
+		// UTF16BE
+		return false
+	} else if resBytes[0] == 0xFF && resBytes[1] == 0xFE {
+		// UTF16LE
+		return false
+	}
+
+	// contents encode
+	if !utf8.Valid(resBytes) {
+		return false
+	}
+
+	return true
 }
 
 // FmtAndWrite - go fmt content and write to filename
@@ -126,15 +143,15 @@ func FmtAndWrite(filename, content string) error {
 		return err
 	}
 
-	n, err := f.WriteString(buf.String())
+	_, err = f.WriteString(buf.String())
 	if err != nil {
 		return err
 	}
-	fmt.Println(n, "byte write to file")
+	// fmt.Println(n, "byte write to file")
 	return nil
 }
 
-// Versions - 阿朱你也不寫注釋，顯然沒裝 meta linter , 哈哈哈
+// Versions - 返回合约版本列表
 func Versions(firstContractPath string, res *Result) types.Error {
 	retErr := types.Error{ErrorCode: types.CodeOK}
 

@@ -128,7 +128,12 @@ func (ch *ContractHelper) contractOfAddress(address types.Address) sdk.IContract
 		return nil
 	}
 
-	return object.NewContractFromSTD(ch.smc, stdContract.(*std.Contract))
+	contract := object.NewContractFromSTD(ch.smc, stdContract.(*std.Contract))
+	if contract.LoseHeight() != 0 && contract.LoseHeight() <= ch.smc.Block().Height() {
+		return nil
+	}
+
+	return contract
 }
 
 // contractVersionList get address list of contract that map by name

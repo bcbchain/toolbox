@@ -81,35 +81,19 @@ func (m *Message) AppendOutput(receipts []types.KVPair) {
 }
 
 // GetTransferToMe parse receipt that it's transfer receipt
-func (m *Message) GetTransferToMe(tokenName string) (transferReceipt *std.Transfer) {
-	var it sdk.IToken
-	if tokenName == "" {
-		it = m.smc.Helper().TokenHelper().Token()
-	} else {
-		it = m.smc.Helper().TokenHelper().TokenOfName(tokenName)
-	}
+func (m *Message) GetTransferToMe() (transferReceipts []*std.Transfer) {
 
-	sdk.Require(it != nil,
-		types.ErrInvalidParameter, fmt.Sprintf("Invalid tokenName=%s", tokenName))
-
+	transferReceipts = make([]*std.Transfer, 0)
 	for _, v := range m.inputReceipts {
-		transferReceipt = m.parseToTransfer(v.Value)
+		transferReceipt := m.parseToTransfer(v.Value)
 		if transferReceipt != nil &&
-			transferReceipt.To == m.smc.Message().Contract().Account() &&
-			transferReceipt.Token == it.Address() {
+			transferReceipt.To == m.smc.Message().Contract().Account() {
+			transferReceipts = append(transferReceipts, transferReceipt)
 			break
 		}
 	}
-	assertOfTransfer(transferReceipt)
-	return transferReceipt
-}
 
-func assertOfTransfer(receipt *std.Transfer) {
-	sdk.Require(receipt != nil,
-		types.ErrInvalidParameter, "must execute transfer tx first")
-
-	sdk.Require(!receipt.Value.IsNegative(),
-		types.ErrInvalidParameter, "incoming token value must not be negative")
+	return
 }
 
 // parseToTransfer get transfer receipt and parse it

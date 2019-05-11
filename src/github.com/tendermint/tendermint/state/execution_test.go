@@ -9,7 +9,7 @@ import (
 
 	"github.com/tendermint/abci/example/kvstore"
 	abci "github.com/tendermint/abci/types"
-	crypto "github.com/tendermint/go-crypto"
+	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/tendermint/proxy"
 	"github.com/tendermint/tendermint/types"
 	cmn "github.com/tendermint/tmlibs/common"
@@ -74,7 +74,7 @@ func TestBeginBlockAbsentValidators(t *testing.T) {
 	for _, tc := range testCases {
 		lastCommit := &types.Commit{BlockID: prevBlockID, Precommits: tc.lastCommitPrecommits}
 
-		block, _ := state.MakeBlock(2, makeTxs(2), lastCommit)
+		block, _ := state.MakeBlock(2, makeTxs(2), lastCommit, "", "", nil)
 		_, err = ExecCommitBlock(proxyApp.Consensus(), block, log.TestingLogger())
 		require.Nil(t, err, tc.desc)
 
@@ -98,8 +98,8 @@ func TestBeginBlockByzantineValidators(t *testing.T) {
 	prevParts := types.PartSetHeader{}
 	prevBlockID := types.BlockID{prevHash, prevParts}
 
-	height1, idx1, val1 := int64(8), 0, []byte("val1")
-	height2, idx2, val2 := int64(3), 1, []byte("val2")
+	height1, idx1, val1 := int64(8), 0, "val1"
+	height2, idx2, val2 := int64(3), 1, "val2"
 	ev1 := types.NewMockGoodEvidence(height1, idx1, val1)
 	ev2 := types.NewMockGoodEvidence(height2, idx2, val2)
 
@@ -118,7 +118,7 @@ func TestBeginBlockByzantineValidators(t *testing.T) {
 	for _, tc := range testCases {
 		lastCommit := &types.Commit{BlockID: prevBlockID}
 
-		block, _ := state.MakeBlock(10, makeTxs(2), lastCommit)
+		block, _ := state.MakeBlock(10, makeTxs(2), lastCommit, "", "", nil)
 		block.Evidence.Evidence = tc.evidence
 		_, err = ExecCommitBlock(proxyApp.Consensus(), block, log.TestingLogger())
 		require.Nil(t, err, tc.desc)
@@ -142,7 +142,7 @@ func state() State {
 	s, _ := MakeGenesisState(&types.GenesisDoc{
 		ChainID: chainID,
 		Validators: []types.GenesisValidator{
-			{privKey.PubKey(), 10000, "test"},
+			{"", privKey.PubKey(), 10000, "test"},
 		},
 		AppHash: nil,
 	})
@@ -150,7 +150,7 @@ func state() State {
 }
 
 func makeBlock(state State, height int64) *types.Block {
-	block, _ := state.MakeBlock(height, makeTxs(state.LastBlockHeight), new(types.Commit))
+	block, _ := state.MakeBlock(height, makeTxs(state.LastBlockHeight), new(types.Commit), "", "", nil)
 	return block
 }
 

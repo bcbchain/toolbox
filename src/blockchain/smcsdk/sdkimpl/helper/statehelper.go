@@ -58,6 +58,21 @@ func (sh *StateHelper) Set(key string, value interface{}) {
 	sh.smc.(*sdkimpl.SmartContract).LlState().Set(fullKey, value)
 }
 
+// Flush flush data in cache to bcchain
+func (sh *StateHelper) Flush() {
+	sh.SMC().(*sdkimpl.SmartContract).LlState().Flush()
+}
+
+// Delete data map by key
+func (sh *StateHelper) Delete(key string) {
+	if !sh.checkKey(key) {
+		return
+	}
+
+	fullKey := sh.smc.Message().Contract().KeyPrefix() + key
+	sh.smc.(*sdkimpl.SmartContract).LlState().Delete(fullKey)
+}
+
 // GetInt get value in db map by key, and then return default if it not exist
 func (sh *StateHelper) GetInt(key string) int {
 	return *sh.GetEx(key, new(int)).(*int)
@@ -708,8 +723,15 @@ func (sh *StateHelper) McClear(key string) {
 	sdkimpl.McInst.Dirty(fullKey)
 }
 
-func (sh *StateHelper) Flush() {
-	sh.SMC().(*sdkimpl.SmartContract).LlState().Flush()
+// McDelete dirty and delete data map by key
+func (sh *StateHelper) McDelete(key string) {
+	if !sh.checkKey(key) {
+		return
+	}
+
+	fullKey := sh.smc.Message().Contract().KeyPrefix() + key
+	sdkimpl.McInst.Dirty(fullKey)
+	sh.smc.(*sdkimpl.SmartContract).LlState().Delete(fullKey)
 }
 
 func (sh *StateHelper) checkKey(key string) bool {

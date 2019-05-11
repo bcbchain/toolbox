@@ -1,6 +1,7 @@
 package genstub
 
 import (
+	"blockchain/smccheck/gen"
 	"blockchain/smccheck/parsecode"
 	"bytes"
 	"os"
@@ -19,6 +20,7 @@ import (
 	stubType "contract/stubcommon/types"
 	tmcommon "github.com/tendermint/tmlibs/common"
 	"blockchain/smcsdk/sdk/types"
+	{{if (hasStruct .Functions)}}. "contract/{{$.OrgID}}/code/{{$.DirectionName}}/v{{$.Version}}/{{$.DirectionName}}"{{end}}
 
 	"github.com/tendermint/tmlibs/log"
 	{{- if (hasMethod .Functions)}}
@@ -67,9 +69,11 @@ func FuncRecover(response *bcType.Response) {
 func (pbs *{{$stubName}}) InitChain(smc sdk.ISmartContract) (response bcType.Response) {
 	defer FuncRecover(&response)
 
+	{{- if $.IsExistInitChain}}
 	contractObj := new({{$.PackageName}}.{{$.ContractStruct}})
 	contractObj.SetSdk(smc)
 	contractObj.InitChain()
+	{{- end}}	
 
 	response.Code = types.CodeOK
 	return response
@@ -105,10 +109,12 @@ func (pbs *{{$stubName}}) Invoke(smc sdk.ISmartContract) (response bcType.Respon
 
 	var data string
 	err = types.Error{ErrorCode:types.CodeOK}
+
+	pbs.logger.Debug("invoke", "methodID", smc.Message().MethodID())
 	switch smc.Message().MethodID() {
 	{{- range $i,$f := $.Functions}}
 	case "{{$f.Method | createProto | calcMethodID | printf "%x"}}":	// prototype: {{createProto $f.Method}}
-		{{if eq (len $f.Results) 1}}data = {{end}}{{lowerFirst $f.Name}}(smc)
+		{{if eq (len $f.Results) 1}}data = {{end}}_{{lowerFirst $f.Name}}(smc)
 	{{- end}}
 	default:
 		err.ErrorCode = types.ErrInvalidMethod
@@ -118,7 +124,7 @@ func (pbs *{{$stubName}}) Invoke(smc sdk.ISmartContract) (response bcType.Respon
 }
 
 {{range $i0,$f := $.Functions}}
-func {{lowerFirst $f.Name}}(smc sdk.ISmartContract) {{if (len $f.Results)}}string{{end}} {
+func _{{lowerFirst $f.Name}}(smc sdk.ISmartContract) {{if (len $f.Results)}}string{{end}} {
 	items := smc.Message().Items()
 	sdk.Require(len(items) == {{paramsLen $f.Method}}, types.ErrStubDefined, "Invalid message data")
 
@@ -167,6 +173,7 @@ type StubExport struct {
 	Port           int
 
 	IsExistUpdateChain bool
+	IsExistInitChain   bool
 	PlainUserStruct    []string
 }
 
@@ -182,6 +189,7 @@ func Res2stub(res *parsecode.Result) StubExport {
 	exp.Version = res.Version
 	exp.Versions = res.Versions
 	exp.IsExistUpdateChain = res.IsExistUpdateChain
+	exp.IsExistInitChain = res.IsExistInitChain
 	imports := make(map[parsecode.Import]struct{})
 
 	fatFunctions := make([]FatFunction, 0)
@@ -228,6 +236,7 @@ func GenMethodStub(res *parsecode.Result, outDir string) error {
 		"paramsLen":    parsecode.ParamsLen,
 		"calcMethodID": parsecode.CalcMethodID,
 		"filterImport": parsecode.FilterImports,
+		"hasStruct":    hasStruct,
 		"dec": func(i int) int {
 			return i - 1
 		},
@@ -267,4 +276,50 @@ func GenMethodStub(res *parsecode.Result, outDir string) error {
 		return err
 	}
 	return nil
+}
+
+func hasStruct(functions []FatFunction) bool {
+	for _, function := range functions {
+		for _, param := range function.Params {
+			if gen.IsLiteralType(param) {
+				continue
+			}
+
+			if gen.IsLiteralTypeEx(param) {
+				continue
+			}
+
+			if gen.IsBnNumber(param) {
+				continue
+			}
+
+			if gen.IsMap(param) {
+				continue
+			}
+
+			return true
+		}
+
+		for _, result := range function.Results {
+			if gen.IsLiteralType(result) {
+				continue
+			}
+
+			if gen.IsLiteralTypeEx(result) {
+				continue
+			}
+
+			if gen.IsBnNumber(result) {
+				continue
+			}
+
+			if gen.IsMap(result) {
+				continue
+			}
+
+			return true
+		}
+	}
+
+	return false
 }
