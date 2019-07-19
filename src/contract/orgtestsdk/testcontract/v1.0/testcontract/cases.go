@@ -18,7 +18,7 @@ func (t *TestContract) testAddress() {
 	printTestCase(0, "计算合约地址，并对比")
 	addr := algorithm.CalcContractAddress(
 		t.sdk.Helper().GenesisHelper().ChainID(),
-		t.sdk.Message().Contract().Owner(),
+		t.sdk.Message().Contract().Owner().Address(),
 		t.sdk.Message().Contract().Name(),
 		t.sdk.Message().Contract().Version())
 	AssertEquals(addr, t.sdk.Message().Contract().Address())
@@ -34,14 +34,14 @@ func (t *TestContract) testAccount() {
 		"",
 		t.sdk.Message().Contract().Name(),
 		"")
-	AssertEquals(addr, t.sdk.Message().Contract().Account())
+	AssertEquals(addr, t.sdk.Message().Contract().Account().Address())
 	printPass()
 }
 
 func (t *TestContract) testOwner() {
 	fmt.Println("\nTest Case: TestOwner()")
 	printTestCase(0, "Message Sender是合约Owner")
-	AssertEquals(t.sdk.Message().Sender().Address(), t.sdk.Message().Contract().Owner())
+	AssertEquals(t.sdk.Message().Sender().Address(), t.sdk.Message().Contract().Owner().Address())
 	printPass()
 }
 
@@ -162,7 +162,7 @@ func (t *TestContract) testOrgID() {
 func (t *TestContract) testSetOwner() {
 	fmt.Println("\nTest Case: TestSetOwner()")
 	printTestCase(0, "合约原始Owner为Message Sender")
-	AssertEquals(t.sdk.Message().Sender().Address(), t.sdk.Message().Contract().Owner())
+	AssertEquals(t.sdk.Message().Sender().Address(), t.sdk.Message().Contract().Owner().Address())
 	printPass()
 
 	pubkey, _ := hex.DecodeString("AAE0014B0B08BB79B17B996ECABEDA6BF02534B64917631BB5DE59FB411B1083")
@@ -191,7 +191,7 @@ func (t *TestContract) testSetOwner() {
 		err := t.setOwner(c.newowner)
 		AssertError(err, c.errcode, c.errmsg)
 		if c.errcode == types.CodeOK {
-			AssertEquals(c.newowner, t.sdk.Message().Contract().Owner())
+			AssertEquals(c.newowner, t.sdk.Message().Contract().Owner().Address())
 			if t.sdk.Message().Contract().Token() != "" {
 				token := t.sdk.Helper().TokenHelper().TokenOfAddress(t.sdk.Message().Contract().Token())
 				AssertEquals(c.newowner, token.Owner())

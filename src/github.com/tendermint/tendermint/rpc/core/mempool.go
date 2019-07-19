@@ -1,15 +1,16 @@
 package core
 
 import (
+	"blockchain/algorithm"
 	"context"
 	"fmt"
-	"blockchain/algorithm"
+	"time"
+
 	"github.com/pkg/errors"
 	abci "github.com/tendermint/abci/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"github.com/tendermint/tendermint/types"
 	cmn "github.com/tendermint/tmlibs/common"
-	"time"
 )
 
 //-----------------------------------------------------------------------------
@@ -48,6 +49,10 @@ import (
 // |-----------+------+---------+----------+-----------------|
 // | tx        | Tx   | nil     | true     | The transaction |
 func BroadcastTxAsync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
+	if consensusReactor.FastSync() {
+		logger.Debug("syncing, rejected", "tx", tx)
+		return nil, fmt.Errorf("syncing, no tx accept")
+	}
 	txHash := cmn.HexBytes(algorithm.CalcCodeHash(string(tx)))
 
 	mempool.GiTxCache(txHash, nil)
@@ -97,6 +102,10 @@ func BroadcastTxAsync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
 // |-----------+------+---------+----------+-----------------|
 // | tx        | Tx   | nil     | true     | The transaction |
 func BroadcastTxSync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
+	if consensusReactor.FastSync() {
+		logger.Debug("syncing, rejected", "tx", tx)
+		return nil, fmt.Errorf("syncing, no tx accept")
+	}
 	txHash := cmn.HexBytes(algorithm.CalcCodeHash(string(tx)))
 
 	resCh := make(chan *abci.Response, 1)
@@ -161,6 +170,10 @@ func BroadcastTxSync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
 // |-----------+------+---------+----------+-----------------|
 // | tx        | Tx   | nil     | true     | The transaction |
 func BroadcastTxCommit(tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
+	if consensusReactor.FastSync() {
+		logger.Debug("syncing, rejected", "tx", tx)
+		return nil, fmt.Errorf("syncing, no tx accept")
+	}
 	txHash := cmn.HexBytes(algorithm.CalcCodeHash(string(tx)))
 
 	// subscribe to tx being committed in block
@@ -215,7 +228,7 @@ func BroadcastTxCommit(tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 			Height:    deliverTxRes.Height,
 		}, nil
 	case <-timer.C:
-		logger.Error("failed to include tx")
+		logger.Error("Timed out waiting for transaction to be included in a block")
 		return &ctypes.ResultBroadcastTxCommit{
 			CheckTx:   *checkTxR,
 			DeliverTx: abci.ResponseDeliverTx{},
@@ -250,7 +263,7 @@ func BroadcastTxCommit(tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 // ```
 func UnconfirmedTxs() (*ctypes.ResultUnconfirmedTxs, error) {
 	txs := mempool.Reap(-1)
-	return &ctypes.ResultUnconfirmedTxs{len(txs), txs}, nil
+	return &ctypes.ResultUnconfirmedTxs{N: len(txs), Txs: txs}, nil
 }
 
 // Get number of unconfirmed transactions.

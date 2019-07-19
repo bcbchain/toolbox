@@ -74,20 +74,14 @@ func FeeAndReceipt(smc sdk.ISmartContract, bMethod bool) (fee, gasUsed int64, re
 	}
 	fee = gasprice * gasUsed
 
-	//negative gas means contract account is the payer
-	//positive gas means tx signer is the payer
-	//check and set payer's balance
-	payer := smc.Tx().Signer()
-	if gas < 0 {
-		payer = smc.Helper().AccountHelper().AccountOf(smc.Message().Contract().Account())
-	}
+	payer := smc.Message().Payer()
 	token := smc.Helper().GenesisHelper().Token().Address()
 	balance := payer.BalanceOfToken(token)
 	if balance.IsLessThanI(fee) {
 		fee = balance.V.Int64()
 		balance = bn.N(0)
 		gasUsed = fee / gasprice
-		err.ErrorCode = types.ErrInsufficientBalance
+		err.ErrorCode = types.ErrFeeNotEnough
 	} else {
 		balance = balance.SubI(fee)
 	}

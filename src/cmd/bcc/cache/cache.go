@@ -2,6 +2,7 @@ package cache
 
 import (
 	"blockchain/smcsdk/sdk/std"
+	"common/bcdb"
 	"common/jsoniter"
 	"os"
 	"path/filepath"
@@ -17,6 +18,12 @@ var (
 
 func Init(path string) {
 	cacheFilePath = path
+
+	var err error
+	db, err = bcdb.OpenDB(dbName, dbIP, dbPort)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func pathOfContract(orgID, contractName, keyStorePath string) string {

@@ -33,13 +33,13 @@ func TestApplyBlock(t *testing.T) {
 
 	state, stateDB := state(), dbm.NewMemDB()
 
-	blockExec := NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(),
+	blockExec := NewBlockExecutor(stateDB, stateDB, log.TestingLogger(), proxyApp.Consensus(),
 		types.MockMempool{}, types.MockEvidencePool{})
 
 	block := makeBlock(state, 1)
-	blockID := types.BlockID{block.Hash(), block.MakePartSet(testPartSize).Header()}
+	blockID := types.BlockID{Hash: block.Hash(), PartsHeader: block.MakePartSet(testPartSize).Header()}
 
-	state, err = blockExec.ApplyBlock(state, blockID, block)
+	_, err = blockExec.ApplyBlock(state, blockID, block)
 	require.Nil(t, err)
 
 	// TODO check state and mempool

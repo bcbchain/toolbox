@@ -57,7 +57,7 @@ func ABCIQuery(path string, data cmn.HexBytes, height int64, trusted bool) (*cty
 	if err != nil {
 		return nil, err
 	}
-	logger.Info("ABCIQuery", "path", path, "data", data, "result", resQuery)
+	logger.Trace("ABCIQuery", "path", path, "data", data, "result", resQuery)
 	return &ctypes.ResultABCIQuery{*resQuery}, nil
 }
 

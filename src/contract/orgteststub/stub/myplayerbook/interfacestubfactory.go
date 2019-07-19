@@ -9,7 +9,7 @@ import (
 	v2_0 "contract/orgteststub/stub/myplayerbook/v2.0/myplayerbook"
 )
 
-//NewInterfaceStub new interface stub
+// NewInterfaceStub new interface stub
 func NewInterfaceStub(smc sdk.ISmartContract, contractName string) types.IContractIntfcStub {
 	//Get contract with ContractName
 	ch := helper.ContractHelper{}

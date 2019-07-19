@@ -27,15 +27,15 @@ func calcABCIResponsesKey(height int64) []byte {
 // LoadStateFromDBOrGenesisFile loads the most recent state from the database,
 // or creates a new one from the given genesisFilePath and persists the result
 // to the database.
-func LoadStateFromDBOrGenesisFile(stateDB dbm.DB, config *cfg.Config) (State, error) {
-	state := LoadState(stateDB)
+func LoadStateFromDBOrGenesisFile(stateDBx dbm.DB, config *cfg.Config) (State, error) {
+	state := LoadState(stateDBx)
 	if state.IsEmpty() {
 		var err error
 		state, err = MakeGenesisStateFromFile(config)
 		if err != nil {
 			return state, err
 		}
-		SaveState(stateDB, state)
+		SaveState(stateDBx, state)
 	}
 
 	return state, nil
@@ -44,15 +44,20 @@ func LoadStateFromDBOrGenesisFile(stateDB dbm.DB, config *cfg.Config) (State, er
 // LoadStateFromDBOrGenesisDoc loads the most recent state from the database,
 // or creates a new one from the given genesisDoc and persists the result
 // to the database.
-func LoadStateFromDBOrGenesisDoc(stateDB dbm.DB, genesisDoc *types.GenesisDoc) (State, error) {
-	state := LoadState(stateDB)
+func LoadStateFromDBOrGenesisDoc(stateDBx dbm.DB, stateDB dbm.DB, genesisDoc *types.GenesisDoc) (State, error) {
+	state := LoadState(stateDBx)
 	if state.IsEmpty() {
-		var err error
-		state, err = MakeGenesisState(genesisDoc)
-		if err != nil {
-			return state, err
+		state = LoadState(stateDB)
+		if state.IsEmpty() {
+			var err error
+			state, err = MakeGenesisState(genesisDoc)
+			if err != nil {
+				return state, err
+			}
+			SaveState(stateDBx, state)
+		} else {
+			SaveState(stateDBx, state)
 		}
-		SaveState(stateDB, state)
 	}
 
 	return state, nil
@@ -166,11 +171,13 @@ func LoadABCIResponses(db dbm.DB, height int64) (*ABCIResponses, error) {
 // This is useful in case we crash after app.Commit and before s.Save().
 // Responses are indexed by height so they can also be loaded later to produce Merkle proofs.
 func saveABCIResponses(db dbm.DB, height int64, abciResponses *ABCIResponses) {
-	db.SetSync(calcABCIResponsesKey(height), abciResponses.Bytes())
+	batch := db.NewBatch()
+	batch.Set(calcABCIResponsesKey(height), abciResponses.Bytes())
 	for _, e := range abciResponses.DeliverTx {
 		e.Height = height
-		db.SetSync(e.TxHash, cdc.MustMarshalBinaryBare(e))
+		batch.Set(e.TxHash, cdc.MustMarshalBinaryBare(e))
 	}
+	batch.WriteSync()
 }
 
 //-----------------------------------------------------------------------------

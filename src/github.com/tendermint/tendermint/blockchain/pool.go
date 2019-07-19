@@ -200,7 +200,9 @@ func (pool *BlockPool) PopRequest() {
 			PanicSanity("PopRequest() requires a valid block")
 		}
 		*/
-		r.Stop()
+		if e := r.Stop(); e != nil {
+			pool.Logger.Warn(e.Error())
+		}
 		delete(pool.requesters, pool.height)
 		pool.height++
 	} else {
@@ -548,7 +550,9 @@ OUTER_LOOP:
 		bpr.pool.sendRequest(bpr.height, peer.id)
 		select {
 		case <-bpr.pool.Quit():
-			bpr.Stop()
+			if e := bpr.Stop(); e != nil {
+				bpr.Logger.Warn(e.Error())
+			}
 			return
 		case <-bpr.Quit():
 			return
@@ -559,7 +563,9 @@ OUTER_LOOP:
 			// We got the block, now see if it's good.
 			select {
 			case <-bpr.pool.Quit():
-				bpr.Stop()
+				if e := bpr.Stop(); e != nil {
+					bpr.Logger.Warn(e.Error())
+				}
 				return
 			case <-bpr.Quit():
 				return

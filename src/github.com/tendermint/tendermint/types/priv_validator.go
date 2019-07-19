@@ -52,7 +52,7 @@ func NewMockPV() *MockPV {
 
 // Implements PrivValidator.
 func (pv *MockPV) GetAddress() crypto.Address {
-	return pv.privKey.PubKey().Address()
+	return pv.privKey.PubKey().Address(crypto.GetChainId())
 }
 
 // Implements PrivValidator.

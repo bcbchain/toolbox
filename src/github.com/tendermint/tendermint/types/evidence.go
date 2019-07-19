@@ -41,6 +41,7 @@ type Evidence interface {
 func RegisterEvidences(cdc *amino.Codec) {
 	cdc.RegisterInterface((*Evidence)(nil), nil)
 	cdc.RegisterConcrete(&DuplicateVoteEvidence{}, "tendermint/DuplicateVoteEvidence", nil)
+	cdc.RegisterConcrete(&TooManyProposalEvidence{}, "tendermint/TooManyProposalEvidence", nil)
 }
 
 //-------------------------------------------
@@ -65,7 +66,7 @@ func (dve *DuplicateVoteEvidence) Height() int64 {
 
 // Address returns the address of the validator.
 func (dve *DuplicateVoteEvidence) Address() string {
-	return dve.PubKey.Address()
+	return dve.PubKey.Address(crypto.GetChainId())
 }
 
 // Index returns the index of the validator.
@@ -123,6 +124,44 @@ func (dve *DuplicateVoteEvidence) Equal(ev Evidence) bool {
 	dveHash := aminoHasher(dve).Hash()
 	evHash := aminoHasher(ev).Hash()
 	return bytes.Equal(dveHash, evHash)
+}
+
+//-----------------------------------------------------------------
+
+// TooManyProposalEvidence contains evidence: a validator propose too many times, disproportional to its voting power.
+type TooManyProposalEvidence struct {
+	PubKey crypto.PubKey
+	H      int64
+}
+
+func (tmpe *TooManyProposalEvidence) Height() int64 {
+	return tmpe.H
+}
+func (tmpe *TooManyProposalEvidence) Address() string {
+	return tmpe.PubKey.Address(crypto.GetChainId())
+}
+func (tmpe *TooManyProposalEvidence) Index() int {
+	return 0
+}
+func (tmpe *TooManyProposalEvidence) Hash() []byte {
+	return aminoHasher(tmpe).Hash()
+}
+func (tmpe *TooManyProposalEvidence) Verify(chainID string) error {
+	return nil
+}
+
+func (tmpe *TooManyProposalEvidence) Equal(ev Evidence) bool {
+	if _, ok := ev.(*TooManyProposalEvidence); !ok {
+		return false
+	}
+
+	dveHash := aminoHasher(tmpe).Hash()
+	evHash := aminoHasher(ev).Hash()
+	return bytes.Equal(dveHash, evHash)
+}
+
+func (tmpe *TooManyProposalEvidence) String() string {
+	return fmt.Sprintf("TooManyProposal: %v at height: %d", tmpe.PubKey.Address(crypto.GetChainId()), tmpe.H)
 }
 
 //-----------------------------------------------------------------

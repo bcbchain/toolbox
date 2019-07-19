@@ -59,6 +59,9 @@ type State struct {
 
 	LastTxsHashList [][]byte
 
+	// added 24 May 2019
+	LastMining *int64
+
 	// add 26 Mar. 2019
 	ChainVersion int64
 }
@@ -87,6 +90,8 @@ func (s State) Copy() State {
 
 		LastResultsHash: s.LastResultsHash,
 		ChainVersion:    s.ChainVersion,
+
+		LastMining: s.LastMining,
 	}
 }
 
@@ -120,7 +125,7 @@ func (s State) MakeBlock(height int64, txs []types.Tx, commit *types.Commit, pro
 	// build base block
 	//block := types.MakeBlock(height, txs, commit)
 
-	block := types.GIMakeBlock(height, txs, commit, s.LastTxsHashList, proposer, s.LastFee, rewardAddr, allocation, s.ChainVersion)
+	block := types.GIMakeBlock(height, txs, commit, s.LastTxsHashList, proposer, s.LastFee, rewardAddr, allocation, s.ChainVersion, s.LastMining)
 
 	// fill header with state data
 	block.ChainID = s.ChainID
@@ -131,6 +136,7 @@ func (s State) MakeBlock(height int64, txs []types.Tx, commit *types.Commit, pro
 
 	block.ConsensusHash = s.ConsensusParams.Hash()
 	block.LastResultsHash = s.LastResultsHash
+	block.LastMining = s.LastMining
 
 	return block, block.MakePartSet(s.ConsensusParams.BlockGossip.BlockPartSizeBytes)
 }
@@ -166,7 +172,7 @@ func MakeGenesisState(genDoc *types.GenesisDoc) (State, error) {
 	validators := make([]*types.Validator, len(genDoc.Validators))
 	for i, val := range genDoc.Validators {
 		pubKey := val.PubKey
-		address := pubKey.Address()
+		address := pubKey.Address(crypto.GetChainId())
 
 		nodeName := val.Name
 

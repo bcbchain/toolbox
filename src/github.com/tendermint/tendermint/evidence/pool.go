@@ -19,7 +19,8 @@ type EvidencePool struct {
 	evidenceStore *EvidenceStore
 
 	// needed to load validators to verify evidence
-	stateDB dbm.DB
+	stateDBx dbm.DB
+	stateDB  dbm.DB
 
 	// latest state
 	mtx   sync.Mutex
@@ -29,10 +30,11 @@ type EvidencePool struct {
 	evidenceChan chan types.Evidence
 }
 
-func NewEvidencePool(stateDB dbm.DB, evidenceStore *EvidenceStore) *EvidencePool {
+func NewEvidencePool(stateDBx dbm.DB, stateDB dbm.DB, evidenceStore *EvidenceStore) *EvidencePool {
 	evpool := &EvidencePool{
+		stateDBx:      stateDBx,
 		stateDB:       stateDB,
-		state:         sm.LoadState(stateDB),
+		state:         sm.LoadState(stateDBx),
 		logger:        log.NewNopLogger(),
 		evidenceStore: evidenceStore,
 		evidenceChan:  make(chan types.Evidence),
@@ -72,7 +74,7 @@ func (evpool *EvidencePool) Update(block *types.Block) {
 	evpool.mtx.Lock()
 	defer evpool.mtx.Unlock()
 
-	state := sm.LoadState(evpool.stateDB)
+	state := sm.LoadState(evpool.stateDBx)
 	if state.LastBlockHeight != block.Height {
 		panic(fmt.Sprintf("EvidencePool.Update: loaded state with height %d when block.Height=%d", state.LastBlockHeight, block.Height))
 	}

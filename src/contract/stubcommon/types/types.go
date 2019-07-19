@@ -8,7 +8,9 @@ import (
 type IContractStub interface {
 	InitChain(smcapi sdk.ISmartContract) types.Response
 	UpdateChain(smcapi sdk.ISmartContract) types.Response
+	Mine(smcapi sdk.ISmartContract) types.Response
 	Invoke(smcapi sdk.ISmartContract) types.Response
+	InvokeInternal(smcapi sdk.ISmartContract, feeFlag bool) types.Response
 }
 
 type IContractIntfcStub interface {

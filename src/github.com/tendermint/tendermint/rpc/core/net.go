@@ -59,7 +59,7 @@ func NetInfo() (*ctypes.ResultNetInfo, error) {
 
 func isPrivate(peer p2p.Peer) bool {
 	for _, id := range privatePeerIDs {
-		if string(peer.NodeInfo().NetAddress().ID) == id {
+		if string(peer.NodeInfo().ID) == id {
 			return true
 		}
 	}
@@ -71,7 +71,7 @@ func UnsafeDialSeeds(seeds []string) (*ctypes.ResultDialSeeds, error) {
 		return &ctypes.ResultDialSeeds{}, errors.New("No seeds provided")
 	}
 	// starts go routines to dial each peer after random delays
-	logger.Info("DialSeeds", "addrBook", addrBook, "seeds", seeds)
+	logger.Trace("DialSeeds", "addrBook", addrBook, "seeds", seeds)
 	err := p2pSwitch.DialPeersAsync(addrBook, seeds, false)
 	if err != nil {
 		return &ctypes.ResultDialSeeds{}, err
@@ -84,7 +84,7 @@ func UnsafeDialPeers(peers []string, persistent bool) (*ctypes.ResultDialPeers, 
 		return &ctypes.ResultDialPeers{}, errors.New("No peers provided")
 	}
 	// starts go routines to dial each peer after random delays
-	logger.Info("DialPeers", "addrBook", addrBook, "peers", peers, "persistent", persistent)
+	logger.Trace("DialPeers", "addrBook", addrBook, "peers", peers, "persistent", persistent)
 	err := p2pSwitch.DialPeersAsync(addrBook, peers, persistent)
 	if err != nil {
 		return &ctypes.ResultDialPeers{}, err

@@ -1,11 +1,12 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
+
+	"github.com/tendermint/go-crypto"
 
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/merkle"
@@ -87,7 +88,7 @@ func (valSet *ValidatorSet) Copy() *ValidatorSet {
 // otherwise.
 func (valSet *ValidatorSet) HasAddress(address string) bool {
 	idx := sort.Search(len(valSet.Validators), func(i int) bool {
-		return bytes.Compare([]byte(address), []byte(valSet.Validators[i].Address)) <= 0
+		return strings.Compare(address, valSet.Validators[i].Address) <= 0
 	})
 	return idx < len(valSet.Validators) && valSet.Validators[idx].Address == address
 }
@@ -96,7 +97,7 @@ func (valSet *ValidatorSet) HasAddress(address string) bool {
 // itself if found. Otherwise, -1 and nil are returned.
 func (valSet *ValidatorSet) GetByAddress(address string) (index int, val *Validator) {
 	idx := sort.Search(len(valSet.Validators), func(i int) bool {
-		return bytes.Compare([]byte(address), []byte(valSet.Validators[i].Address)) <= 0
+		return strings.Compare(address, valSet.Validators[i].Address) <= 0
 	})
 	if idx < len(valSet.Validators) && valSet.Validators[idx].Address == address {
 		return idx, valSet.Validators[idx].Copy()
@@ -133,13 +134,26 @@ func (valSet *ValidatorSet) TotalVotingPower() int64 {
 
 // GetProposer returns the current proposer. If the validator set is empty, nil
 // is returned.
-func (valSet *ValidatorSet) GetProposer() (proposer *Validator) {
+func (valSet *ValidatorSet) GetProposer(invalidProposer *[]crypto.Address, cb func(v *Validator)) (proposer *Validator) {
 	if len(valSet.Validators) == 0 {
 		return nil
 	}
 	if valSet.Proposer == nil {
 		valSet.Proposer = valSet.findProposer()
 	}
+
+	if invalidProposer != nil {
+		for _, addr := range *invalidProposer {
+			if addr == valSet.Proposer.Address {
+				valSet.IncrementAccum(1)
+				if cb != nil {
+					cb(valSet.Proposer)
+				}
+				return valSet.GetProposer(invalidProposer, cb)
+			}
+		}
+	}
+
 	return valSet.Proposer.Copy()
 }
 
@@ -147,7 +161,7 @@ func (valSet *ValidatorSet) findProposer() *Validator {
 	var proposer *Validator
 	for _, val := range valSet.Validators {
 		if proposer == nil || val.Address != proposer.Address {
-			proposer = proposer.CompareAccum(val)
+			proposer = val.CompareAccum(proposer)
 		}
 	}
 	return proposer
@@ -171,7 +185,7 @@ func (valSet *ValidatorSet) Hash() []byte {
 func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 	val = val.Copy()
 	idx := sort.Search(len(valSet.Validators), func(i int) bool {
-		return bytes.Compare([]byte(val.Address), []byte(valSet.Validators[i].Address)) <= 0
+		return strings.Compare(val.Address, valSet.Validators[i].Address) <= 0
 	})
 	if idx >= len(valSet.Validators) {
 		valSet.Validators = append(valSet.Validators, val)
@@ -212,7 +226,7 @@ func (valSet *ValidatorSet) Update(val *Validator) (updated bool) {
 // and true. If returns nil and false if validator is not present in the set.
 func (valSet *ValidatorSet) Remove(address string) (val *Validator, removed bool) {
 	idx := sort.Search(len(valSet.Validators), func(i int) bool {
-		return bytes.Compare([]byte(address), []byte(valSet.Validators[i].Address)) <= 0
+		return strings.Compare(address, valSet.Validators[i].Address) <= 0
 	})
 	if idx >= len(valSet.Validators) || valSet.Validators[idx].Address != address {
 		return nil, false
@@ -374,17 +388,17 @@ func (valSet *ValidatorSet) StringIndented(indent string) string {
 	if valSet == nil {
 		return "nil-ValidatorSet"
 	}
-	valStrings := []string{}
+	var valStrings []string
 	valSet.Iterate(func(index int, val *Validator) bool {
 		valStrings = append(valStrings, val.String())
 		return false
 	})
 	return fmt.Sprintf(`ValidatorSet{
-%s  Proposer: %v
+%s  Proposer(maybe): %v
 %s  Validators:
 %s    %v
 %s}`,
-		indent, valSet.GetProposer().String(),
+		indent, valSet.GetProposer(nil, nil).String(),
 		indent,
 		indent, strings.Join(valStrings, "\n"+indent+"  "),
 		indent)
@@ -402,7 +416,7 @@ func (vs ValidatorsByAddress) Len() int {
 }
 
 func (vs ValidatorsByAddress) Less(i, j int) bool {
-	return bytes.Compare([]byte(vs[i].Address), []byte(vs[j].Address)) == -1
+	return strings.Compare(vs[i].Address, vs[j].Address) == -1
 }
 
 func (vs ValidatorsByAddress) Swap(i, j int) {
@@ -422,7 +436,7 @@ type accumComparable struct {
 func (ac accumComparable) Less(o interface{}) bool {
 	other := o.(accumComparable).Validator
 	larger := ac.CompareAccum(other)
-	return bytes.Equal([]byte(larger.Address), []byte(ac.Address))
+	return larger.Address == ac.Address
 }
 
 //----------------------------------------
@@ -447,7 +461,7 @@ func RandValidatorSet(numValidators int, votingPower int64) (*ValidatorSet, []Pr
 ///////////////////////////////////////////////////////////////////////////////
 // Safe multiplication and addition/subtraction
 
-func safeMul(a int64, b int64) (int64, bool) {
+func safeMul(a, b int64) (int64, bool) {
 	if a == 0 || b == 0 {
 		return 0, false
 	}

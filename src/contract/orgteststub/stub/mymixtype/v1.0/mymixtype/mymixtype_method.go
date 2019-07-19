@@ -53,8 +53,23 @@ func (mc *MyMixTypeStub) UpdateChain(smc sdk.ISmartContract) (response types.Res
 	return response
 }
 
+// UpdateChain update smart contract
+func (mc *MyMixTypeStub) Mine(smc sdk.ISmartContract) (response types.Response) {
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.UpdateChain()
+
+	response.Code = types.CodeOK
+	return response
+}
+
 // Invoke invoke method
 func (mc *MyMixTypeStub) Invoke(smc sdk.ISmartContract) types.Response {
+	return mc.InvokeInternal(smc, true)
+}
+
+// InvokeInternal invoke method
+func (mc *MyMixTypeStub) InvokeInternal(smc sdk.ISmartContract, feeFlag bool) types.Response {
 
 	// TODO 手续费
 	//emitFee(smc)

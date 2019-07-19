@@ -2,10 +2,17 @@ package smccheck
 
 import (
 	"blockchain/smccheck/gen"
+	"blockchain/types"
+	"fmt"
+	"os"
 	"testing"
 )
 
 func TestGen(t *testing.T) {
+	err := os.RemoveAll("/Users/zerppen/GIBlockChain/trunk/code/v2.0/bcsmc-sdk/src/test/contract/stubcommon")
+	if err != nil {
+		fmt.Println(err)
+	}
 	path := "/Users/zerppen/GIBlockChain/trunk/code/v2.0/bcsmc-sdk/src/test/contract"
 
 	var contractInfoList []gen.ContractInfo
@@ -23,5 +30,8 @@ func TestGen(t *testing.T) {
 		LoseHeight:   0,
 	})
 
-	Gen(path, contractInfoList)
+	_, e := Gen(path, "mining", "2.0", contractInfoList)
+	if e.ErrorCode != types.CodeOK {
+		fmt.Println(e.ErrorDesc)
+	}
 }

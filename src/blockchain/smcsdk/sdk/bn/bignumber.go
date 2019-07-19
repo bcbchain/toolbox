@@ -76,6 +76,8 @@ func NewNumber(x int64) Number {
 	return v
 }
 
+const MaxBase = 10 + ('z' - 'a' + 1) + ('Z' - 'A' + 1)
+
 //NewNumberStringBase convert the value s to Number, interpreted in the given base,
 //and returns z and a boolean indicating success. The entire string
 //(not just a prefix) must be valid for success. If SetString fails,
@@ -102,7 +104,8 @@ func NewNumberStringBase(s string, base int) Number {
 
 //NewNumberBigInt convert x to Number
 func NewNumberBigInt(x *big.Int) Number {
-	v := Number{V: x}
+
+	v := Number{V: big.NewInt(x.Int64())}
 	return v
 }
 

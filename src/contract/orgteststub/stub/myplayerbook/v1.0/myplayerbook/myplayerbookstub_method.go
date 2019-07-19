@@ -42,8 +42,23 @@ func (mc *PlayerBookStub) UpdateChain(smc sdk.ISmartContract) (response types2.R
 	return response
 }
 
+// UpdateChain update smart contract
+func (mc *PlayerBookStub) Mine(smc sdk.ISmartContract) (response types2.Response) {
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.UpdateChain()
+
+	response.Code = types2.CodeOK
+	return response
+}
+
 //Invoke invoke function
 func (pbs *PlayerBookStub) Invoke(smcAPI sdk.ISmartContract) types2.Response {
+	return pbs.InvokeInternal(smcAPI, true)
+}
+
+//Invoke invoke function
+func (pbs *PlayerBookStub) InvokeInternal(smcAPI sdk.ISmartContract, feeFlag bool) types2.Response {
 	// TODO 扣手续费
 	//
 	switch smcAPI.Message().MethodID() {

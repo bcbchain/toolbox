@@ -18,7 +18,9 @@ import (
 type IContractStub interface {
 	InitChain(smcapi sdk.ISmartContract) types.Response
 	UpdateChain(smcapi sdk.ISmartContract) types.Response
+	Mine(smcapi sdk.ISmartContract) types.Response
 	Invoke(smcapi sdk.ISmartContract) types.Response
+	InvokeInternal(smcapi sdk.ISmartContract, feeFlag bool) types.Response
 }
 
 type IContractIntfcStub interface {
@@ -105,20 +107,14 @@ func FeeAndReceipt(smc sdk.ISmartContract, bMethod bool) (fee, gasUsed int64, re
 	}
 	fee = gasprice * gasUsed
 
-	//negative gas means contract account is the payer
-	//positive gas means tx signer is the payer
-	//check and set payer's balance
-	payer := smc.Tx().Signer()
-	if gas < 0 {
-		payer = smc.Helper().AccountHelper().AccountOf(smc.Message().Contract().Account())
-	}
+	payer := smc.Message().Payer()
 	token := smc.Helper().GenesisHelper().Token().Address()
 	balance := payer.BalanceOfToken(token)
 	if balance.IsLessThanI(fee) {
 		fee = balance.V.Int64()
 		balance = bn.N(0)
 		gasUsed = fee/gasprice
-		err.ErrorCode = types.ErrInsufficientBalance
+		err.ErrorCode = types.ErrFeeNotEnough
 	} else {
 		balance = balance.SubI(fee)
 	}
@@ -183,16 +179,18 @@ func receiptName(receipt interface{}) string {
 `
 
 // GenStubCommon - generate the stub common go source
-func GenStubCommon(rootDir string) error {
+func GenStubCommon(rootDir string) {
 
 	err := genTypes(rootDir)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	err = genCommon(rootDir)
+	if err != nil {
+		panic(err)
+	}
 
-	return err
 }
 
 func genTypes(rootDir string) error {

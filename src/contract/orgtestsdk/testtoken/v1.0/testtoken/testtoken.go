@@ -115,13 +115,13 @@ func (t *TestToken) TestGasPrice(gasPrice int64) {
 
 func (t *TestToken) runSetTotalSupply(index int, token sdk.IToken, totalSupply bn.Number, code uint32, desc, errMsg string) {
 	printTestCase(index, desc)
-	acc := t.sdk.Helper().AccountHelper().AccountOf(token.Owner())
+	acc := token.Owner()
 	oldBalance := acc.Balance()
 	oldTotalSupply := token.TotalSupply()
 	err := t.setTotalSupply(token, totalSupply)
 	AssertError(err, code, errMsg)
 	if code == types.CodeOK {
-		acc := t.sdk.Helper().AccountHelper().AccountOf(token.Owner())
+		acc := token.Owner()
 		Assert(acc.Balance().Sub(oldBalance).IsEqual(totalSupply.Sub(oldTotalSupply)))
 		Assert(token.TotalSupply().IsEqual(totalSupply))
 	}

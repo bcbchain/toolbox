@@ -5,10 +5,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/tendermint/abci/types"
 	"github.com/tendermint/tendermint/softforks"
 	"github.com/tendermint/tendermint/version"
-
-	"github.com/tendermint/abci/types"
 	"strings"
 	"sync"
 	"time"
@@ -48,7 +47,8 @@ func MakeBlock(height int64, txs []Tx, commit *Commit) *Block {
 
 //将上一次交易hashlist存入到下一个block的data中
 func GIMakeBlock(height int64, txs []Tx, commit *Commit, txHashList [][]byte,
-	proposer string, lastFee uint64, rewardAddr string, lastAllocation []types.Allocation, chainVersion int64) *Block {
+	proposer string, lastFee uint64, rewardAddr string, lastAllocation []types.Allocation,
+	chainVersion int64, lastMining *int64) *Block {
 
 	block := &Block{
 		Header: &Header{
@@ -57,6 +57,7 @@ func GIMakeBlock(height int64, txs []Tx, commit *Commit, txHashList [][]byte,
 			NumTxs:          int64(len(txs)),
 			LastFee:         lastFee,
 			LastAllocation:  lastAllocation,
+			LastMining:      lastMining,
 			ProposerAddress: proposer,
 			RewardAddress:   rewardAddr,
 		},
@@ -248,6 +249,7 @@ type Header struct {
 
 	// added 06 August 2018
 	RandomOfBlock cmn.HexBytes `json:"random_of_block,omitempty"`
+	LastMining    *int64       `json:"last_mining,omitempty"` // added 24 May 2019
 	// version of block - added 14 Dec. 2018
 	Version *string `json:"version,omitempty"`
 	// added 26 Mar. 2019
@@ -282,18 +284,20 @@ func (h *Header) Hash() cmn.HexBytes {
 		"Proposer":       aminoHasher(h.ProposerAddress),
 		"RewardAddr":     aminoHasher(h.RewardAddress),
 	}
+	if softforks.IsForkForV1023233(h.Height) {
+		mapForHash["RandomOfBlock"] = aminoHasher(h.RandomOfBlock)
+	}
+
+	if h.LastMining != nil {
+		mapForHash["last_mining"] = aminoHasher(h.LastMining)
+	}
 
 	if h.ChainVersion != nil && *h.ChainVersion != 0 {
-		mapForHash["RandomOfBlock"] = aminoHasher(h.RandomOfBlock)
 		mapForHash["Version"] = aminoHasher(h.Version)
 		mapForHash["ChainVersion"] = aminoHasher(h.ChainVersion)
-		return merkle.SimpleHashFromMap(mapForHash)
-	} else if softforks.IsForkForV1023233(h.Height) {
-		mapForHash["RandomOfBlock"] = aminoHasher(h.RandomOfBlock)
-		return merkle.SimpleHashFromMap(mapForHash)
-	} else {
-		return merkle.SimpleHashFromMap(mapForHash)
 	}
+
+	return merkle.SimpleHashFromMap(mapForHash)
 }
 
 func (as *Allocation) StringIndented(indent string) string {
@@ -315,15 +319,6 @@ func (h *Header) StringIndented(indent string) string {
 	if h == nil {
 		return "nil-Header"
 	}
-	v := ""
-	chainVersion := int64(0)
-	if h.Version != nil {
-		v = *h.Version
-	}
-
-	if h.ChainVersion != nil {
-		chainVersion = *h.ChainVersion
-	}
 
 	return fmt.Sprintf(`Header{
 %s  ChainID:        %v
@@ -344,6 +339,7 @@ func (h *Header) StringIndented(indent string) string {
 %s  Proposer:       %v
 %s  RewardAddr:     %v
 %s  RandomOfBlock:  %v
+%s  LastMining:     %v
 %s  Version:		%v
 %s  ChainVersion:	%v
 %s}#%v`,
@@ -365,8 +361,9 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.ProposerAddress,
 		indent, h.RewardAddress,
 		indent, h.RandomOfBlock,
-		indent, v,
-		indent, chainVersion,
+		indent, h.LastMining,
+		indent, h.Version,
+		indent, h.ChainVersion,
 		indent, h.Hash())
 }
 

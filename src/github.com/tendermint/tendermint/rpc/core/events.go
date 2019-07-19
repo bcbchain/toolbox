@@ -87,7 +87,7 @@ import (
 // <aside class="notice">WebSocket only</aside>
 func Subscribe(wsCtx rpctypes.WSRPCContext, query string) (*ctypes.ResultSubscribe, error) {
 	addr := wsCtx.GetRemoteAddr()
-	logger.Info("Subscribe to query", "remote", addr, "query", query)
+	logger.Trace("Subscribe to query", "remote", addr, "query", query)
 
 	q, err := tmquery.New(query)
 	if err != nil {
@@ -139,7 +139,7 @@ func Subscribe(wsCtx rpctypes.WSRPCContext, query string) (*ctypes.ResultSubscri
 // <aside class="notice">WebSocket only</aside>
 func Unsubscribe(wsCtx rpctypes.WSRPCContext, query string) (*ctypes.ResultUnsubscribe, error) {
 	addr := wsCtx.GetRemoteAddr()
-	logger.Info("Unsubscribe from query", "remote", addr, "query", query)
+	logger.Trace("Unsubscribe from query", "remote", addr, "query", query)
 	q, err := tmquery.New(query)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse query")
@@ -172,7 +172,7 @@ func Unsubscribe(wsCtx rpctypes.WSRPCContext, query string) (*ctypes.ResultUnsub
 // <aside class="notice">WebSocket only</aside>
 func UnsubscribeAll(wsCtx rpctypes.WSRPCContext) (*ctypes.ResultUnsubscribe, error) {
 	addr := wsCtx.GetRemoteAddr()
-	logger.Info("Unsubscribe from all", "remote", addr)
+	logger.Trace("Unsubscribe from all", "remote", addr)
 	err := eventBusFor(wsCtx).UnsubscribeAll(context.Background(), addr)
 	if err != nil {
 		return nil, err

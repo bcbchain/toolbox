@@ -39,7 +39,7 @@ func (mysuit *MySuite) TestMyCrossmc_Set(c *C) {
 
 	test.run().transfer(bn.N(registrationFee))
 	utest.Commit()
-	utest.AssertBalance(utest.UTP.Helper().AccountHelper().AccountOf(utest.UTP.Message().Contract().Account()), utest.UTP.Helper().TokenHelper().TokenOfName("LOC").Name(), bn.N(registrationFee))
+	utest.AssertBalance(utest.UTP.Message().Contract().Account(), utest.UTP.Helper().TokenHelper().TokenOfName("LOC").Name(), bn.N(registrationFee))
 
 	test.run().transfer(bn.N(registrationFee)).Set(0)
 	v := uint64(0)

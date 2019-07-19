@@ -33,7 +33,7 @@ func printEd() {
 	fmt.Println("```")
 	fmt.Println("")
 	fmt.Printf("For example, the 32-byte Ed25519 pubkey `%X` would be encoded as `%X`.\n\n", pub[:], pub.Bytes())
-	fmt.Printf("The address would then be `RIPEMD160(0x%X)` or `%X`\n", pub.Bytes(), pub.Address())
+	fmt.Printf("The address would then be `RIPEMD160(0x%X)` or `%X`\n", pub.Bytes(), pub.Address(""))
 	fmt.Println("")
 
 	name = "tendermint/SignatureKeyEd25519"
@@ -88,7 +88,7 @@ func printSecp() {
 	fmt.Println("```")
 	fmt.Println("")
 	fmt.Printf("For example, the 33-byte Secp256k1 pubkey `%X` would be encoded as `%X`\n\n", pub[:], pub.Bytes())
-	fmt.Printf("The address would then be `RIPEMD160(SHA256(0x%X))` or `%X`\n", pub[:], pub.Address())
+	fmt.Printf("The address would then be `RIPEMD160(SHA256(0x%X))` or `%X`\n", pub[:], pub.Address(""))
 	fmt.Println("")
 
 	name = "tendermint/SignatureKeySecp256k1"

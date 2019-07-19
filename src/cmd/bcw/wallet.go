@@ -28,7 +28,7 @@ func Create(keyStorePath, name, password string) error {
 	PubK := acct.PubKey().(crypto.PubKeyEd25519)
 
 	fmt.Println("OK")
-	fmt.Println("PubKey: ", hex.EncodeToString(PubK[:]))
+	fmt.Println("PubKey: ", "0x"+hex.EncodeToString(PubK[:]))
 
 	return nil
 }
@@ -51,8 +51,8 @@ func Export(keyStorePath, name, password string) error {
 	PubK := acct.PubKey().(crypto.PubKeyEd25519)
 
 	fmt.Println("OK")
-	fmt.Println("PrivateKey: ", hex.EncodeToString(PriK[:len(PriK)-len(PubK)]))
-	fmt.Println("PubKey:     ", hex.EncodeToString(PubK[:]))
+	fmt.Println("PrivateKey: ", "0x"+hex.EncodeToString(PriK[:len(PriK)-len(PubK)]))
+	fmt.Println("PubKey:     ", "0x"+hex.EncodeToString(PubK[:]))
 
 	return nil
 }
@@ -67,16 +67,28 @@ func Import(keyStorePath, name, password, privateKey string) error {
 	if privateKey == "" {
 		return errors.New("Need private Key of account ")
 	}
+	if privateKey[:2] == "0x" {
+		privateKey = privateKey[2:]
+	}
 
 	newPrivateKey, err := hex.DecodeString(privateKey)
 	if err != nil {
 		Error(fmt.Sprintf("Private Key conversion \"%v\" failed, %v", name, err.Error()))
 	}
-	if len(newPrivateKey) != 64 {
+
+	if len(newPrivateKey) != 64 && len(newPrivateKey) != 32 {
 		return errors.New(fmt.Sprintf("Private key \"%v\" length incorrect, %v", privateKey, err.Error()))
 	}
 
-	acct, err := wal.ImportAccount(keyStorePath, name, password, crypto.PrivKeyEd25519FromBytes(newPrivateKey))
+	CompletePrivateKey := crypto.PrivKeyEd25519FromBytes(newPrivateKey[:32])
+	pub := CompletePrivateKey.PubKey().Bytes()
+
+	newPrivateKey2 := append(newPrivateKey[:32], pub[5:]...)
+
+	if len(newPrivateKey2) != 64 {
+		return errors.New(fmt.Sprintf("Private key \"%v\" length incorrect, %v", privateKey, err.Error()))
+	}
+	acct, err := wal.ImportAccount(keyStorePath, name, password, crypto.PrivKeyEd25519FromBytes(newPrivateKey2))
 	if err != nil {
 		Error(fmt.Sprintf("Import account \"%v\" failed, %v", name, err.Error()))
 	}
@@ -84,7 +96,7 @@ func Import(keyStorePath, name, password, privateKey string) error {
 	PubK := acct.PubKey().(crypto.PubKeyEd25519)
 
 	fmt.Println("OK")
-	fmt.Println("PubKey: ", hex.EncodeToString(PubK[:]))
+	fmt.Println("PubKey: ", "0x"+hex.EncodeToString(PubK[:]))
 
 	return nil
 }

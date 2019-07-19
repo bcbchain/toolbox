@@ -1,7 +1,8 @@
 package mydice2win
 
 import (
-	"blockchain/smcsdk/sdk/mapx"
+	"blockchain/smcsdk/sdk/forx"
+	"blockchain/smcsdk/sdk/std"
 	"encoding/hex"
 
 	"blockchain/smcsdk/sdk"
@@ -76,11 +77,21 @@ func (dw *Dice2Win) UpdateChain() {
 	dw._setSettings(settings)
 }
 
+// Mine - construct mine function
+//@:public:mine
+func (dw *Dice2Win) Mine() {
+	// update data
+	settings := dw._settings()
+	settings.BetExpirationBlocks = 100
+
+	dw._setSettings(settings)
+}
+
 // SetSecretSigner - Set the secret signer
 //@:public:method:gas[500]
 func (dw *Dice2Win) SetSecretSigner(newSecretSigner types.PubKey) {
 
-	sdk.RequireOwner(dw.sdk)
+	sdk.RequireOwner()
 	sdk.Require(len(newSecretSigner) == 32,
 		types.ErrInvalidParameter, "length of newSecretSigner must be 32 bytes")
 
@@ -95,11 +106,11 @@ func (dw *Dice2Win) SetSecretSigner(newSecretSigner types.PubKey) {
 //@:public:method:gas[500]
 func (dw *Dice2Win) SetSettings(newSettingsStr string) {
 
-	sdk.RequireOwner(dw.sdk)
+	sdk.RequireOwner()
 
 	//只有在全部结算完成，退款完成后，才能设置settings
 	settings := dw._settings()
-	mapx.ForRange(settings.TokenNames, func(k string, v struct{}) {
+	forx.Range(settings.TokenNames, func(k string, v struct{}) {
 		lockedAmount := dw._lockedAmount(k)
 		sdk.Require(lockedAmount.CmpI(0) == 0,
 			types.ErrUserDefined, "only lockedAmount is zero that can do SetSettings()")
@@ -129,7 +140,7 @@ func (dw *Dice2Win) SetSettings(newSettingsStr string) {
 //@:public:method:gas[500]
 func (dw *Dice2Win) SetRecvFeeInfos(recvFeeInfosStr string) {
 
-	sdk.RequireOwner(dw.sdk)
+	sdk.RequireOwner()
 
 	infos := make([]RecvFeeInfo, 0)
 	err := jsoniter.Unmarshal([]byte(recvFeeInfosStr), &infos)
@@ -146,11 +157,11 @@ func (dw *Dice2Win) SetRecvFeeInfos(recvFeeInfosStr string) {
 //@:public:method:gas[500]
 func (dw *Dice2Win) WithdrawFunds(tokenName string, beneficiary types.Address, withdrawAmount bn.Number) {
 
-	sdk.RequireOwner(dw.sdk)
+	sdk.RequireOwner()
 	sdk.Require(withdrawAmount.CmpI(0) > 0,
 		types.ErrInvalidParameter, "withdrawAmount must be larger than zero")
 
-	account := dw.sdk.Helper().AccountHelper().AccountOf(dw.sdk.Message().Contract().Account())
+	account := dw.sdk.Message().Contract().Account()
 	lockedAmount := dw._lockedAmount(tokenName)
 	unlockedAmount := account.BalanceOfName(tokenName).Sub(lockedAmount)
 	sdk.Require(unlockedAmount.Cmp(withdrawAmount) >= 0,
@@ -169,7 +180,7 @@ func (dw *Dice2Win) WithdrawFunds(tokenName string, beneficiary types.Address, w
 func (dw *Dice2Win) PlaceBet(betMask bn.Number, modulo, commitLastBlock int64, commit, signData []byte, refAddress types.Address) {
 
 	//contract owner cannot do it
-	sdk.Require(dw.sdk.Message().Sender().Address() != dw.sdk.Message().Contract().Owner(),
+	sdk.Require(dw.sdk.Message().Sender().Address() != dw.sdk.Message().Contract().Owner().Address(),
 		types.ErrNoAuthorization, "contract owner cannot do PlaceBet")
 
 	// Check that commit is valid - it has not expired and its signature is valid and must be new
@@ -194,14 +205,16 @@ func (dw *Dice2Win) PlaceBet(betMask bn.Number, modulo, commitLastBlock int64, c
 	// get transfer receipt and save value
 	settings := dw._settings()
 	transferReceipts := dw.sdk.Message().GetTransferToMe()
-	for _, receipt := range transferReceipts {
+	forx.Range(transferReceipts, func(i int, receipt *std.Transfer) bool {
 		token := dw.sdk.Helper().TokenHelper().TokenOfAddress(receipt.Token)
 		if _, ok := settings.TokenNames[token.Name()]; ok {
 			tokenName = token.Name()
 			amount = receipt.Value
-			break
+			return forx.Break
 		}
-	}
+
+		return true
+	})
 
 	sdk.Require(tokenName != "" && amount.CmpI(0) > 0,
 		types.ErrUserDefined, "Must transfer tokens to me before place a bet")
@@ -229,7 +242,7 @@ func (dw *Dice2Win) PlaceBet(betMask bn.Number, modulo, commitLastBlock int64, c
 		types.ErrInvalidParameter, "MaxProfit limit violation")
 
 	// Check whether contract account has enough funds to process this bet.
-	contractAcct := dw.sdk.Helper().AccountHelper().AccountOf(dw.sdk.Message().Contract().Account())
+	contractAcct := dw.sdk.Message().Contract().Account()
 	totalLockedAmount := dw._lockedAmount(tokenName)
 	totalLockedAmount = totalLockedAmount.Add(possibleWinAmount).Add(feeAmount)
 	totalUnlockedAmount := contractAcct.BalanceOfName(tokenName).Sub(totalLockedAmount)
@@ -295,7 +308,7 @@ func (dw *Dice2Win) SettleBet(reveal []byte) {
 	dw._setLockedAmount(bet.TokenName, lockedAmount)
 
 	// Send the win funds to gambler.
-	contractAcct := dw.sdk.Helper().AccountHelper().AccountOf(dw.sdk.Message().Contract().Account())
+	contractAcct := dw.sdk.Message().Contract().Account()
 	if diceWin.CmpI(0) > 0 {
 		contractAcct.TransferByName(bet.TokenName, bet.Gambler, diceWin)
 	}
@@ -342,7 +355,7 @@ func (dw *Dice2Win) RefundBet(commit []byte) {
 	dw._setLockedAmount(bet.TokenName, lockedAmount)
 
 	//Send the funds to gambler.
-	contractAcct := dw.sdk.Helper().AccountHelper().AccountOf(dw.sdk.Message().Contract().Account())
+	contractAcct := dw.sdk.Message().Contract().Account()
 	contractAcct.TransferByName(bet.TokenName, bet.Gambler, bet.Amount)
 
 	// Move bet into 'processed' state, release funds.

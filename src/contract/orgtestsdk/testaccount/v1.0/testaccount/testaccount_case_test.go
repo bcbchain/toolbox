@@ -37,8 +37,7 @@ func (mysuit *MySuite) TestTestAccount_TestTransferByToken(c *check.C) {
 
 	//为合约账户转入本币
 	owner := test.obj.sdk.Helper().GenesisHelper().Token().Owner()
-	ownacc := test.obj.sdk.Helper().AccountHelper().AccountOf(owner)
-	test.run().setSender(ownacc).transfer(bn.N(1E12))
+	test.run().setSender(owner).transfer(bn.N(1E12))
 
 	test.setSender(contractOwner).InitChain()
 	SetChecker(c)
@@ -57,8 +56,7 @@ func (mysuit *MySuite) TestTestAccount_TestTransferByName(c *check.C) {
 
 	//为合约账户转入本币
 	owner := test.obj.sdk.Helper().GenesisHelper().Token().Owner()
-	ownacc := test.obj.sdk.Helper().AccountHelper().AccountOf(owner)
-	test.run().setSender(ownacc).transfer(bn.N(1E12))
+	test.run().setSender(owner).transfer(bn.N(1E12))
 
 	test.setSender(contractOwner).InitChain()
 	SetChecker(c)
@@ -76,8 +74,7 @@ func (mysuit *MySuite) TestTestAccount_TestTransferBySymbol(c *check.C) {
 
 	//为合约账户转入本币
 	owner := test.obj.sdk.Helper().GenesisHelper().Token().Owner()
-	ownacc := test.obj.sdk.Helper().AccountHelper().AccountOf(owner)
-	test.run().setSender(ownacc).transfer(bn.N(1E12))
+	test.run().setSender(owner).transfer(bn.N(1E12))
 
 	test.setSender(contractOwner).InitChain()
 	SetChecker(c)

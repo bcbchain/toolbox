@@ -1,6 +1,7 @@
 package walv1
 
 import (
+	common2 "cmd/bcc/common"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -32,6 +33,7 @@ type Account struct {
 }
 
 func NewAccount(name string, keystoreDir string) (*Account, error) {
+	cfg := common2.GetBCCConfig()
 	var keystorePath string
 	if keystoreDir != "" {
 		keystorePath = keystoreDir + "/" + name + ".wal"
@@ -46,7 +48,7 @@ func NewAccount(name string, keystoreDir string) (*Account, error) {
 
 	privKey := crypto.GenPrivKeyEd25519()
 	pubKey := privKey.PubKey()
-	address := pubKey.Address()
+	address := pubKey.Address(cfg.DefaultChainID)
 
 	acct := Account{
 		Name:         name,

@@ -35,7 +35,7 @@ func testContractInfo(test *TestObject, owner sdk.IAccount) {
 	//Address
 	//Account
 	//Checking contract Owner
-	ut.AssertEquals(test.obj.sdk.Message().Contract().Owner(), owner.Address())
+	ut.AssertEquals(test.obj.sdk.Message().Contract().Owner().Address(), owner.Address())
 	//Checking contract name
 	ut.AssertEquals(test.obj.sdk.Message().Contract().Name(), contractName)
 	ut.AssertEquals(test.obj.sdk.Message().Contract().KeyPrefix(), "/"+contractName)
@@ -67,7 +67,7 @@ func testContractSetting(test *TestObject, owner sdk.IAccount) {
 
 	for _, c := range cases {
 		ut.AssertError(test.run().setSender(c.sender).SetOwner(c.newOwner), c.excepted)
-		ut.AssertEquals(test.obj.sdk.Message().Contract().Owner(), c.dbOwner)
+		ut.AssertEquals(test.obj.sdk.Message().Contract().Owner().Address(), c.dbOwner)
 	}
 }
 
@@ -135,13 +135,11 @@ func (mysuit *MySuite) TestTestSdk_IAccount(c *C) {
 
 	//ut.AssertEquals(test.obj.sdk.Contract().Account(), "") //Address
 	genowner := test.obj.sdk.Helper().GenesisHelper().Token().Owner()
-	//	AccountOf(_addr Address) IAccount            //根据账户地址构造账户信息对象
-	genacc := test.obj.sdk.Helper().AccountHelper().AccountOf(genowner)
+	acc := test.obj.sdk.Message().Contract().Account()
 
 	value := N(1E12)
-	genacc.TransferByName("loc", test.obj.sdk.Message().Contract().Account(), value)
+	genowner.TransferByName("loc", acc.Address(), value)
 	ut.Commit()
-	acc := test.obj.sdk.Helper().AccountHelper().AccountOf(test.obj.sdk.Message().Contract().Account())
 	//ut.AssertEquals(acc.Balance().String(), value.String())
 	ut.AssertEquals(acc.BalanceOfName("loc").String(), value.String())
 	ut.AssertEquals(acc.BalanceOfSymbol("loc").String(), value.String())
@@ -178,19 +176,17 @@ func (mysuit *MySuite) TestTestSdk_IAccountHelper(c *C) {
 
 	//测试用例： 取创世owner,生成创世owner的账户，对比信息
 	genowner := test.obj.sdk.Helper().GenesisHelper().Token().Owner()
-	//	AccountOf(_addr Address) IAccount            //根据账户地址构造账户信息对象
-	genacc := test.obj.sdk.Helper().AccountHelper().AccountOf(genowner)
-	ut.Assert(genacc != nil)
-	ut.Assert(genacc.Balance().IsLE(test.obj.sdk.Helper().GenesisHelper().Token().TotalSupply()))
-	ut.AssertEquals(genacc.Address(), genowner)
+	ut.Assert(genowner != nil)
+	ut.Assert(genowner.Balance().IsLE(test.obj.sdk.Helper().GenesisHelper().Token().TotalSupply()))
+	ut.AssertEquals(genowner.Address(), genowner)
 
 	//	AccountOfPubKey(_pubkey PubKey) IAccount     //根据账户公钥构造账户信息对象
 	// 测试用例： 根据上一步得到的创世账户的公钥生成一个新账户，对比账户信息，必须完全匹配
-	acc := test.obj.sdk.Helper().AccountHelper().AccountOfPubKey(genacc.PubKey())
+	acc := test.obj.sdk.Helper().AccountHelper().AccountOfPubKey(genowner.PubKey())
 	ut.Assert(acc != nil)
-	ut.AssertEquals(acc.Address(), genacc.Address())
-	ut.AssertEquals(acc.PubKey(), genacc.PubKey())
-	ut.AssertEquals(acc.Balance().String(), genacc.Balance().String())
+	ut.AssertEquals(acc.Address(), genowner.Address())
+	ut.AssertEquals(acc.PubKey(), genowner.PubKey())
+	ut.AssertEquals(acc.Balance().String(), genowner.Balance().String())
 }
 
 //IBlockChainHelper
@@ -209,7 +205,7 @@ func (mysuit *MySuite) TestTestSdk_IBlockChainHelper(c *C) {
 	//	CalcAccountFromName(_name string) Address                                  //根据合约名称计算合约的账户地址
 	//  检查本合约的账户地址
 	accaddr := helper.CalcAccountFromName(contractName, "")
-	ut.AssertEquals(accaddr, test.obj.sdk.Message().Contract().Account())
+	ut.AssertEquals(accaddr, test.obj.sdk.Message().Contract().Account().Address())
 	//  输入Name 为空，依然可以生成一个地址
 	ut.Assert(helper.CalcAccountFromName("", "") != "")
 
@@ -217,7 +213,7 @@ func (mysuit *MySuite) TestTestSdk_IBlockChainHelper(c *C) {
 	//  检查本合约的地址
 	ver := test.obj.sdk.Message().Contract().Version()
 	owner := test.obj.sdk.Message().Contract().Owner()
-	ctraddr := helper.CalcContractAddress(contractName, ver, owner)
+	ctraddr := helper.CalcContractAddress(contractName, ver, owner.Address())
 	ut.AssertEquals(test.obj.sdk.Message().Contract().Address(), ctraddr)
 	//  参数为空，依然可以生成一个地址
 	ut.Assert(helper.CalcContractAddress("", "", "") != "")
@@ -249,7 +245,7 @@ func (mysuit *MySuite) TestTestSdk_IContractHelper(c *C) {
 	//	ContractOfName(_name string) IContract        //根据合约名字返回当前有效合约对象
 	ic2 := helper.ContractOfName(contractName)
 	ut.AssertEquals(ic1.Address(), ic2.Address())
-	ut.AssertEquals(ic1.Owner(), ic2.Owner())
+	ut.AssertEquals(ic1.Owner().Address(), ic2.Owner().Address())
 	ut.AssertEquals(ic1.CodeHash().String(), ic2.CodeHash().String())
 
 	//不存在的合约名称
@@ -298,14 +294,14 @@ func (mysuit *MySuite) TestTestSdk_IToken(c *C) {
 	totalSupply := N(1E15)
 
 	icontract := test.obj.sdk.Message().Contract()
-	newobject := test.run().setSender(test.obj.sdk.Helper().AccountHelper().AccountOf(icontract.Owner()))
+	newobject := test.run().setSender(test.obj.sdk.Helper().AccountHelper().AccountOf(icontract.Owner().Address()))
 	newtoken := newobject.obj.sdk.Helper().TokenHelper().RegisterToken(tokenName, tokenSymbol, totalSupply, false, false)
 	ut.Assert(newtoken != nil)
 
 	//	Address() Address                         //代币地址
 	ut.AssertEquals(newtoken.Address(), icontract.Address())
 	//	Owner() Address                           //代币拥有者的账户地址
-	ut.AssertEquals(newtoken.Owner(), icontract.Owner())
+	ut.AssertEquals(newtoken.Owner().Address(), icontract.Owner().Address())
 	//	Name() string                             //代币的名称
 	//	Symbol() string                           //代币的符号
 	//	TotalSupply() Number                      //代币的总供应量
@@ -406,7 +402,7 @@ func (mysuit *MySuite) TestTestSdk_ITokenHelper(c *C) {
 		{curToken + curToken, curSymbol + curSymbol, N(1E15), true, true, types.ErrNoAuthorization},
 	}
 	icontract := test.obj.sdk.Message().Contract()
-	newobject := test.run().setSender(test.obj.sdk.Helper().AccountHelper().AccountOf(icontract.Owner()))
+	newobject := test.run().setSender(test.obj.sdk.Helper().AccountHelper().AccountOf(icontract.Owner().Address()))
 
 	//	RegisterToken(_name, _symbol string, totalSupply Number, addSupplyEnabled, burnEnabled bool) (IToken, Error) //注册一个新的代币
 	for _, c := range testcases {
@@ -452,7 +448,7 @@ func (mysuit *MySuite) TestTestSdk_ITokenHelper(c *C) {
 	}
 
 	// 不存在的代币
-	ut.Assert(helper.TokenOfAddress(gen.Token().Owner()) == nil)
+	ut.Assert(helper.TokenOfAddress(gen.Token().Owner().Address()) == nil)
 	ut.Assert(helper.TokenOfName(curToken+curSymbol) == nil)
 	ut.Assert(helper.TokenOfSymbol(curToken+curSymbol) == nil)
 	ut.Assert(helper.TokenOfContract(newobject.obj.sdk.Helper().ContractHelper().ContractOfName("myplayerbook").Address()) == nil)

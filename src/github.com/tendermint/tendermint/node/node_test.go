@@ -37,7 +37,9 @@ func TestNodeStartStop(t *testing.T) {
 
 	// stop the node
 	go func() {
-		n.Stop()
+		if e := n.Stop(); e != nil {
+			println(e.Error())
+		}
 	}()
 
 	select {

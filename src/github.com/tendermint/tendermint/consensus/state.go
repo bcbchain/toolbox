@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tendermint/go-crypto"
+
 	"github.com/ebuchman/fail-test"
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
@@ -25,6 +27,7 @@ import (
 
 const (
 	proposalHeartbeatIntervalSeconds = 2
+	permittedClockDeviationInSeconds = 15
 )
 
 //-----------------------------------------------------------------------------
@@ -59,6 +62,11 @@ type timeoutInfo struct {
 
 func (ti *timeoutInfo) String() string {
 	return fmt.Sprintf("%v ; %d/%d %v", ti.Duration, ti.Height, ti.Round, ti.Step)
+}
+
+type heightNProposer struct {
+	Height   int64
+	Proposer crypto.Address
 }
 
 // ConsensusState handles execution of the consensus algorithm.
@@ -111,6 +119,9 @@ type ConsensusState struct {
 
 	// closed when we finish shutting down
 	done chan struct{}
+
+	historyProposers []heightNProposer
+	currentProposer  *types.Validator
 }
 
 // 为避免ConsensusState的全局锁被锁住导致获取Status的请求无法及时返回，
@@ -119,6 +130,77 @@ var (
 	stateMtx  sync.Mutex
 	stateCopy sm.State
 )
+
+func (cs *ConsensusState) GetUnqualifiedProposers() *[]crypto.Address {
+	// 不记账，不添乱
+	if cs.privValidator == nil || !cs.Validators.HasAddress(cs.privValidator.GetAddress()) {
+		return nil
+	}
+	cs.fillHistoryProposers()
+
+	m := make(map[string]uint64)
+	total := uint64(0)
+	for _, p := range cs.historyProposers {
+		if p.Proposer != "" {
+			if v, ok := m[p.Proposer]; !ok {
+				m[p.Proposer] = 1
+			} else {
+				m[p.Proposer] = v + 1
+			}
+			total += 1
+		}
+	}
+	result := make([]crypto.Address, 0)
+	totalPower := uint64(0)
+	for _, v := range cs.Validators.Validators {
+		totalPower += v.VotingPower
+	}
+	for k, v := range m {
+		_, val := cs.Validators.GetByAddress(k)
+		if val == nil {
+			continue
+		}
+		nextRatio := (v + 1) * 1.0 / total
+		defineRatio := 2.0 * val.VotingPower / totalPower
+		if nextRatio > defineRatio {
+			cs.Logger.Warn("next proposer exclude", "val", k, "nextRatio", nextRatio, "defineRatio", defineRatio)
+			result = append(result, k)
+		}
+	}
+
+	return &result
+}
+
+func (cs *ConsensusState) fillHistoryProposers() {
+	numVal := cs.Validators.Size()
+	numHistory := int64(10 * numVal)
+	if len(cs.historyProposers) != numVal*10 {
+		oldHis := cs.historyProposers
+		cs.historyProposers = make([]heightNProposer, numHistory, numHistory)
+		for _, p := range oldHis {
+			if p.Height < cs.Height && p.Height > cs.Height-numHistory {
+				idx := p.Height % numHistory
+				cs.historyProposers[idx] = p
+			}
+		}
+	}
+	for idx, p := range cs.historyProposers {
+		if p.Height == 0 {
+			h := cs.Height/numHistory*numHistory + int64(idx)
+			if h > cs.Height {
+				h = h - numHistory
+			}
+			if h <= 0 {
+				continue
+			}
+			meta := cs.blockStore.LoadBlockMeta(h)
+			if meta == nil {
+				continue
+			}
+			cs.historyProposers[idx] = heightNProposer{Height: h, Proposer: meta.Header.ProposerAddress}
+		}
+	}
+}
 
 // NewConsensusState returns a new ConsensusState.
 func NewConsensusState(config *cfg.ConsensusConfig, state sm.State, blockExec *sm.BlockExecutor, blockStore types.BlockStore, mempool types.Mempool, evpool types.EvidencePool) *ConsensusState {
@@ -270,7 +352,7 @@ func (cs *ConsensusState) OnStart() error {
 }
 
 // timeoutRoutine: receive requests for timeouts on tickChan and fire timeouts on tockChan
-// receiveRoutine: serializes processing of proposoals, block parts, votes; coordinates state transitions
+// receiveRoutine: serializes processing of proposals, block parts, votes; coordinates state transitions
 func (cs *ConsensusState) startRoutines(maxSteps int) {
 	err := cs.timeoutTicker.Start()
 	if err != nil {
@@ -284,7 +366,9 @@ func (cs *ConsensusState) startRoutines(maxSteps int) {
 func (cs *ConsensusState) OnStop() {
 	cs.BaseService.OnStop()
 
-	cs.timeoutTicker.Stop()
+	if e := cs.timeoutTicker.Stop(); e != nil {
+		cs.Logger.Warn("cs.timeoutTicker.Stop ERROR", "e", e.Error())
+	}
 
 	// Make BaseService.Wait() wait until cs.wal.Wait()
 	if cs.IsRunning() {
@@ -377,6 +461,14 @@ func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *t
 
 func (cs *ConsensusState) updateHeight(height int64) {
 	cs.Height = height
+	// update proposal history
+	if height > 2 && cs.Validators != nil && cs.currentProposer != nil {
+		idx := (height - 1) % (int64(cs.Validators.Size()) * 10)
+		if len(cs.historyProposers) == 0 {
+			cs.historyProposers = make([]heightNProposer, 10*cs.Validators.Size(), cs.Validators.Size()*10)
+		}
+		cs.historyProposers[idx] = heightNProposer{Height: height - 1, Proposer: cs.currentProposer.Address}
+	}
 }
 
 func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType) {
@@ -393,7 +485,7 @@ func (cs *ConsensusState) scheduleRound0(rs *cstypes.RoundState) {
 
 // Attempt to schedule a timeout (by sending timeoutInfo on the tickChan)
 func (cs *ConsensusState) scheduleTimeout(duration time.Duration, height int64, round int, step cstypes.RoundStepType) {
-	cs.timeoutTicker.ScheduleTimeout(timeoutInfo{duration, height, round, step})
+	cs.timeoutTicker.ScheduleTimeout(timeoutInfo{Duration: duration, Height: height, Round: round, Step: step})
 }
 
 // send a msg into the receiveRoutine regarding our own proposal, block part, or vote
@@ -513,7 +605,9 @@ func (cs *ConsensusState) newStep() {
 	cs.nSteps++
 	// newStep is called by updateToStep in NewConsensusState before the eventBus is set!
 	if cs.eventBus != nil {
-		cs.eventBus.PublishEventNewRoundStep(rs)
+		if e := cs.eventBus.PublishEventNewRoundStep(rs); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventNewRoundStep", "e", e.Error())
+		}
 	}
 }
 
@@ -529,6 +623,8 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 	defer func() {
 		if r := recover(); r != nil {
 			cs.Logger.Error("CONSENSUS FAILURE!!!", "err", r, "stack", string(debug.Stack()))
+			cs.Logger.Flush()
+			panic("CONSENSUS ERROR, unrecoverable, restart and copy block")
 		}
 	}()
 
@@ -567,7 +663,9 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 			// priv_val tracks LastSig
 
 			// close wal now that we're done writing to it
-			cs.wal.Stop()
+			if e := cs.wal.Stop(); e != nil {
+				cs.Logger.Warn("cs.wal.Stop", "e", e.Error())
+			}
 
 			close(cs.done)
 			return
@@ -586,6 +684,7 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 	case *ProposalMessage:
 		// will not cause transition.
 		// once proposal is set, we can receive block parts
+		cs.Logger.Warn("Error with msg", "msg", msg, "proposer", cs.currentProposer) // TODO 增加个日志查找验签失败原因，随后此条日志将被删除
 		err = cs.setProposal(msg.Proposal)
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
@@ -615,7 +714,7 @@ func (cs *ConsensusState) handleMsg(mi msgInfo) {
 		cs.Logger.Error("Unknown msg type", reflect.TypeOf(msg))
 	}
 	if err != nil {
-		cs.Logger.Error("Error with msg", "type", reflect.TypeOf(msg), "peer", peerID, "err", err, "msg", msg)
+		cs.Logger.Error("Error with msg", "type", reflect.TypeOf(msg), "peer", peerID, "err", err, "msg", msg, "proposer", cs.currentProposer)
 	}
 }
 
@@ -640,13 +739,19 @@ func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	case cstypes.RoundStepNewRound:
 		cs.enterPropose(ti.Height, 0)
 	case cstypes.RoundStepPropose:
-		cs.eventBus.PublishEventTimeoutPropose(cs.RoundStateEvent())
+		if e := cs.eventBus.PublishEventTimeoutPropose(cs.RoundStateEvent()); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventTimeoutPropose", "e", e.Error())
+		}
 		cs.enterPrevote(ti.Height, ti.Round)
 	case cstypes.RoundStepPrevoteWait:
-		cs.eventBus.PublishEventTimeoutWait(cs.RoundStateEvent())
+		if e := cs.eventBus.PublishEventTimeoutWait(cs.RoundStateEvent()); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventTimeoutWait", "e", e.Error())
+		}
 		cs.enterPrecommit(ti.Height, ti.Round)
 	case cstypes.RoundStepPrecommitWait:
-		cs.eventBus.PublishEventTimeoutWait(cs.RoundStateEvent())
+		if e := cs.eventBus.PublishEventTimeoutWait(cs.RoundStateEvent()); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventTimeoutWait", "e", e.Error())
+		}
 		cs.enterNewRound(ti.Height, ti.Round+1)
 	default:
 		panic(cmn.Fmt("Invalid timeout step: %v", ti.Step))
@@ -706,7 +811,9 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	}
 	cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 
-	cs.eventBus.PublishEventNewRound(cs.RoundStateEvent())
+	if e := cs.eventBus.PublishEventNewRound(cs.RoundStateEvent()); e != nil {
+		cs.Logger.Warn("eventBus.PublishEventNewRound", "e", e.Error())
+	}
 
 	// Wait for txs to be available in the mempool
 	// before we enterPropose in round 0. If the last block changed the app hash,
@@ -751,8 +858,12 @@ func (cs *ConsensusState) proposalHeartbeat(height int64, round int) {
 			ValidatorAddress: addr,
 			ValidatorIndex:   valIndex,
 		}
-		cs.privValidator.SignHeartbeat(chainID, heartbeat)
-		cs.eventBus.PublishEventProposalHeartbeat(types.EventDataProposalHeartbeat{heartbeat})
+		if e := cs.privValidator.SignHeartbeat(chainID, heartbeat); e != nil {
+			cs.Logger.Warn("privValidator.SignHeartbeat", "e", e.Error())
+		}
+		if e := cs.eventBus.PublishEventProposalHeartbeat(types.EventDataProposalHeartbeat{Heartbeat: heartbeat}); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventProposalHeartbeat", "e", e.Error())
+		}
 		counter++
 		time.Sleep(proposalHeartbeatIntervalSeconds * time.Second)
 	}
@@ -797,16 +908,28 @@ func (cs *ConsensusState) enterPropose(height int64, round int) {
 	}
 	cs.Logger.Debug("This node is a validator")
 
-	if cs.isProposer() {
-		cs.Logger.Info("enterPropose: Our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
+	proposer := cs.getProposer()
+	if proposer.Address == cs.privValidator.GetAddress() {
+		cs.Logger.Info("enterPropose: Our turn to propose", "proposer", proposer, "privValidator", cs.privValidator)
 		cs.decideProposal(height, round)
 	} else {
-		cs.Logger.Info("enterPropose: Not our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
+		cs.Logger.Info("enterPropose: Not our turn to propose", "proposer", proposer, "privValidator", cs.privValidator)
 	}
 }
 
-func (cs *ConsensusState) isProposer() bool {
-	return cs.Validators.GetProposer().Address == cs.privValidator.GetAddress()
+func (cs *ConsensusState) getProposer() *types.Validator {
+	cs.currentProposer = cs.Validators.GetProposer(cs.GetUnqualifiedProposers(), cs.tooManyProposalEvidence)
+	return cs.currentProposer
+}
+
+func (cs *ConsensusState) tooManyProposalEvidence(v *types.Validator) {
+	ev := &types.TooManyProposalEvidence{
+		PubKey: v.PubKey,
+		H:      cs.Height,
+	}
+	if e := cs.evpool.AddEvidence(ev); e != nil {
+		cs.Logger.Warn("add TooManyProposalEvidence ERROR", "ev", ev)
+	}
 }
 
 func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
@@ -834,9 +957,9 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 	if err := cs.privValidator.SignProposal(cs.state.ChainID, proposal); err == nil {
 		// Set fields
 		/*  fields set by setProposal and addBlockPart
-		cs.Proposal = proposal
-		cs.ProposalBlock = block
-		cs.ProposalBlockParts = blockParts
+		    cs.Proposal = proposal
+		    cs.ProposalBlock = block
+		    cs.ProposalBlockParts = blockParts
 		*/
 
 		// send proposal and block parts on internal msg queue
@@ -924,7 +1047,9 @@ func (cs *ConsensusState) enterPrevote(height int64, round int) {
 
 	// fire event for how we got here
 	if cs.isProposalComplete() {
-		cs.eventBus.PublishEventCompleteProposal(cs.RoundStateEvent())
+		if e := cs.eventBus.PublishEventCompleteProposal(cs.RoundStateEvent()); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventCompleteProposal", "e", e.Error())
+		}
 	} else {
 		// we received +2/3 prevotes for a future round
 		// TODO: catchup event?
@@ -949,8 +1074,21 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	}
 
 	// If ProposalBlock is nil, prevote nil.
-	if cs.ProposalBlock == nil {
+	if cs.ProposalBlock == nil || cs.ProposalBlock.Header == nil {
 		logger.Info("enterPrevote: ProposalBlock is nil")
+		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+		return
+	}
+
+	// Add logic for node's clock is out of sync
+	if cs.ProposalBlock.Header.Time.Before(cs.state.LastBlockTime) { // 提案时间早于上一个 block
+		cs.Logger.Warn("4444 proposal time < lastBlockTime", "proposal", cs.ProposalBlock.Header.Time, "last", cs.state.LastBlockTime)
+		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+		return
+	}
+	sec3p := time.Now().UTC().Add(permittedClockDeviationInSeconds * time.Second)
+	if cs.ProposalBlock.Header.Time.After(sec3p) { // 提案时间晚于当前时间 + 15 秒
+		cs.Logger.Warn("4444 proposal time > now+15sec", "proposal", cs.ProposalBlock.Header.Time, "now+15sec", sec3p)
 		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 		return
 	}
@@ -1027,7 +1165,9 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 	}
 
 	// At this point +2/3 prevoted for a particular block or nil
-	cs.eventBus.PublishEventPolka(cs.RoundStateEvent())
+	if e := cs.eventBus.PublishEventPolka(cs.RoundStateEvent()); e != nil {
+		cs.Logger.Warn("eventBus.PublishEventPolka", "e", e.Error())
+	}
 
 	// the latest POLRound should be this round
 	polRound, _ := cs.Votes.POLInfo()
@@ -1044,7 +1184,9 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 			cs.LockedRound = 0
 			cs.LockedBlock = nil
 			cs.LockedBlockParts = nil
-			cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
+			if e := cs.eventBus.PublishEventUnlock(cs.RoundStateEvent()); e != nil {
+				cs.Logger.Warn("eventBus.PublishEventUnlock", "e", e.Error())
+			}
 		}
 		cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
 		return
@@ -1056,8 +1198,41 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 	if cs.LockedBlock.HashesTo(blockID.Hash) {
 		cs.Logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
 		cs.LockedRound = round
-		cs.eventBus.PublishEventRelock(cs.RoundStateEvent())
+		if e := cs.eventBus.PublishEventRelock(cs.RoundStateEvent()); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventRelock", "e", e.Error())
+		}
 		cs.signAddVote(types.VoteTypePrecommit, blockID.Hash, blockID.PartsHeader)
+		return
+	}
+
+	// Add logic for node's clock is out of sync
+	if cs.Proposal != nil {
+		if cs.Proposal.Timestamp.Before(cs.state.LastBlockTime) { // 提案时间早于上一个 block
+			cs.Logger.Warn("4444 proposal time < lastBlockTime", "proposal", cs.Proposal.Timestamp, "last", cs.state.LastBlockTime)
+			cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
+			return
+		}
+		sec3p := time.Now().UTC().Add(permittedClockDeviationInSeconds * time.Second)
+		if cs.Proposal.Timestamp.After(sec3p) { // 提案时间晚于当前时间 +15秒
+			cs.Logger.Warn("4444 proposal time > now+15sec", "proposal", cs.Proposal.Timestamp, "now+15sec", sec3p)
+			cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
+			return
+		}
+
+	} else if cs.ProposalBlock != nil && cs.ProposalBlock.Header != nil {
+		if cs.ProposalBlock.Header.Time.After(cs.state.LastBlockTime) { // 提案时间早于上一个 block
+			cs.Logger.Warn("4444 proposal time < lastBlockTime", "proposal", cs.ProposalBlock.Header.Time, "last", cs.state.LastBlockTime)
+			cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
+			return
+		}
+		sec3p := time.Now().UTC().Add(permittedClockDeviationInSeconds * time.Second)
+		if cs.ProposalBlock.Header.Time.After(sec3p) { // 提案时间晚于当前时间 +15秒
+			cs.Logger.Warn("4444 proposal time > now+15sec", "proposal", cs.ProposalBlock.Header.Time, "now+15sec", sec3p)
+			cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
+			return
+		}
+	} else {
+		//cs.Logger.Warn("4444 proposal==nil && proposal Block==nil")
 		return
 	}
 
@@ -1071,7 +1246,9 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.LockedRound = round
 		cs.LockedBlock = cs.ProposalBlock
 		cs.LockedBlockParts = cs.ProposalBlockParts
-		cs.eventBus.PublishEventLock(cs.RoundStateEvent())
+		if e := cs.eventBus.PublishEventLock(cs.RoundStateEvent()); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventLock", "e", e.Error())
+		}
 		cs.signAddVote(types.VoteTypePrecommit, blockID.Hash, blockID.PartsHeader)
 		return
 	}
@@ -1087,7 +1264,9 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		cs.ProposalBlock = nil
 		cs.ProposalBlockParts = types.NewPartSetFromHeader(blockID.PartsHeader)
 	}
-	cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
+	if e := cs.eventBus.PublishEventUnlock(cs.RoundStateEvent()); e != nil {
+		cs.Logger.Warn("eventBus.PublishEventUnlock", "e", e.Error())
+	}
 	cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
 }
 
@@ -1177,6 +1356,12 @@ func (cs *ConsensusState) tryFinalizeCommit(height int64) {
 		return
 	}
 
+	// 没收齐不行呀，后面还一个panic等着呢
+	if !cs.ProposalBlockParts.IsComplete() {
+		cs.Logger.Info("Attempt to finalize failed. We don't have all commit block parts.", "height", height, "total", cs.ProposalBlockParts.Total(), "count", cs.ProposalBlockParts.Count())
+		return
+	}
+
 	//	go
 	cs.finalizeCommit(height)
 }
@@ -1242,7 +1427,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// NOTE: the block.AppHash wont reflect these txs until the next block
 	var err error
-	stateCopy, err = cs.blockExec.ApplyBlock(stateCopy, types.BlockID{block.Hash(), blockParts.Header()}, block)
+	stateCopy, err = cs.blockExec.ApplyBlock(stateCopy, types.BlockID{Hash: block.Hash(), PartsHeader: blockParts.Header()}, block)
 	if err != nil {
 		cs.Logger.Error("Error on ApplyBlock. Did the application crash? Please restart tendermint", "err", err)
 		err := cmn.Kill()
@@ -1295,7 +1480,10 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 	}
 
 	// Verify signature
-	if !cs.Validators.GetProposer().PubKey.VerifyBytes(proposal.SignBytes(cs.state.ChainID), proposal.Signature) {
+	if cs.currentProposer == nil {
+		cs.getProposer()
+	}
+	if !cs.currentProposer.PubKey.VerifyBytes(proposal.SignBytes(cs.state.ChainID), proposal.Signature) {
 		return ErrInvalidProposalSignature
 	}
 
@@ -1355,7 +1543,9 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerID p2p.ID) error {
 				cs.Logger.Error("Found conflicting vote from ourselves. Did you unsafe_reset a validator?", "height", vote.Height, "round", vote.Round, "type", vote.Type)
 				return err
 			}
-			cs.evpool.AddEvidence(voteErr.DuplicateVoteEvidence)
+			if e := cs.evpool.AddEvidence(voteErr.DuplicateVoteEvidence); e != nil {
+				cs.Logger.Warn("add dupVoteEvidence ERROR", "ev", voteErr.DuplicateVoteEvidence)
+			}
 			return err
 		} else {
 			// Probably an invalid signature / Bad peer.
@@ -1386,7 +1576,9 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		}
 
 		cs.Logger.Info(cmn.Fmt("Added to lastPrecommits: %v", cs.LastCommit.StringShort()))
-		cs.eventBus.PublishEventVote(types.EventDataVote{vote})
+		if e := cs.eventBus.PublishEventVote(types.EventDataVote{Vote: vote}); e != nil {
+			cs.Logger.Warn("eventBus.PublishEventVote", "e", e.Error())
+		}
 
 		// if we can skip timeoutCommit and have all the votes now,
 		if cs.config.SkipTimeoutCommit && cs.LastCommit.HasAll() {
@@ -1413,7 +1605,9 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 		return
 	}
 
-	cs.eventBus.PublishEventVote(types.EventDataVote{vote})
+	if e := cs.eventBus.PublishEventVote(types.EventDataVote{Vote: vote}); e != nil {
+		cs.Logger.Warn("eventBus.PublishEventVote", "e", e.Error())
+	}
 
 	switch vote.Type {
 	case types.VoteTypePrevote:
@@ -1431,7 +1625,9 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 				cs.LockedRound = 0
 				cs.LockedBlock = nil
 				cs.LockedBlockParts = nil
-				cs.eventBus.PublishEventUnlock(cs.RoundStateEvent())
+				if e := cs.eventBus.PublishEventUnlock(cs.RoundStateEvent()); e != nil {
+					cs.Logger.Warn("eventBus.PublishEventUnlock", "e", e.Error())
+				}
 			}
 		}
 		// Update ValidBlock
@@ -1503,7 +1699,7 @@ func (cs *ConsensusState) signVote(type_ byte, hash []byte, header types.PartSet
 		Round:            cs.Round,
 		Timestamp:        time.Now().UTC(),
 		Type:             type_,
-		BlockID:          types.BlockID{hash, header},
+		BlockID:          types.BlockID{Hash: hash, PartsHeader: header},
 	}
 	err := cs.privValidator.SignVote(cs.state.ChainID, vote)
 	return vote, err

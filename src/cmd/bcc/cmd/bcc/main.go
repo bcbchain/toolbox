@@ -34,6 +34,7 @@ var RootCmd = &cobra.Command{
 
 var (
 	keyStorePath string
+	file         string
 
 	// call flag
 	name       string
@@ -79,6 +80,13 @@ var (
 	deployer     types.Address
 	orgID        string
 	contractAddr types.Address
+
+	//Block params
+	num  string
+	time string
+
+	//query params
+	key string
 )
 
 func Execute() error {
@@ -116,7 +124,7 @@ var blockCmd = &cobra.Command{
 	Long:  "Query block information with height, must great than zero",
 	Args:  cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return block(chainID, height)
+		return block(height, time, num, chainID)
 	},
 }
 
@@ -161,7 +169,7 @@ var commitTxCmd = &cobra.Command{
 	Long:  "Commit transaction with tx's data",
 	Args:  cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return commitTx(chainID, tx)
+		return commitTx(tx, file, chainID)
 	},
 }
 
@@ -264,6 +272,17 @@ var contractInfoCmd = &cobra.Command{
 	},
 }
 
+// query method
+var queryCmd = &cobra.Command{
+	Use:   "query",
+	Short: "Query the chain information through the RPC interface",
+	Long:  "Query the chain information through the RPC interface",
+	Args:  cobra.ExactArgs(0),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return query(key, chainID)
+	},
+}
+
 func callCmdFlags() {
 	callCmd.PersistentFlags().StringVarP(&name, "name", "n", "", "name of wallet")
 	callCmd.PersistentFlags().StringVarP(&password, "password", "p", "", "password of wallet")
@@ -284,6 +303,8 @@ func blockHeightCmdFlags() {
 }
 func blockCmdFlags() {
 	blockCmd.PersistentFlags().StringVarP(&height, "height", "t", "", "height of blockchain")
+	blockCmd.PersistentFlags().StringVarP(&num, "num", "n", "", "number of block")
+	blockCmd.PersistentFlags().StringVarP(&time, "rt", "m", "", "time of blockTime, example : \"2006-01-02 15:04:05\"")
 	blockCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
 }
 func transactionCmdFlags() {
@@ -309,6 +330,7 @@ func nonceCmdFlags() {
 func commitTxCmdFlags() {
 	commitTxCmd.PersistentFlags().StringVarP(&tx, "tx", "t", "", "data of transaction")
 	commitTxCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
+	commitTxCmd.PersistentFlags().StringVarP(&file, "file", "f", "", "transaction data file")
 }
 func versionCmdFlags() {
 }
@@ -388,6 +410,11 @@ func contractInfoFlags() {
 	contractInfoCmd.PersistentFlags().StringVarP(&orgID, "orgID", "i", "", "organization ID")
 	contractInfoCmd.PersistentFlags().StringVarP(&contractAddr, "contractAddr", "a", "", "address of contract")
 }
+func queryFlags() {
+	queryCmd.PersistentFlags().StringVarP(&key, "key", "k", "", "rpc query param")
+	queryCmd.PersistentFlags().StringVarP(&chainID, "chainid", "c", "", "chainid define blockchain for this invoke")
+}
+
 func addFlags() {
 	callCmdFlags()
 	blockHeightCmdFlags()
@@ -405,6 +432,7 @@ func addFlags() {
 	transferFlags()
 	runAsRpcServiceFlags()
 	contractInfoFlags()
+	queryFlags()
 }
 
 func addCommand() {
@@ -424,6 +452,7 @@ func addCommand() {
 	RootCmd.AddCommand(transferCmd)
 	RootCmd.AddCommand(runAsRPCServiceCmd)
 	RootCmd.AddCommand(contractInfoCmd)
+	RootCmd.AddCommand(queryCmd)
 }
 
 func Error(s string) {

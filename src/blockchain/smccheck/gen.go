@@ -7,87 +7,102 @@ import (
 	"blockchain/smccheck/parsecode"
 	"blockchain/smcsdk/sdk/std"
 	"blockchain/smcsdk/sdk/types"
-	"errors"
 	"fmt"
+	"github.com/docker/docker/api/types/versions"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const orgGenesis = "orgJgaGConUyK81zibntUBjQ33PKctpk1K1G"
 
 // Gen - walk contract path and generate code
-func Gen(contractDir string, contractInfoList []gen.ContractInfo) (results []std.GenResult, err types.Error) {
+func Gen(contractDir, contractName, version string, contractInfoList []gen.ContractInfo) (results []std.GenResult, err types.Error) {
 
 	err.ErrorCode = types.CodeOK
 
 	subDirs, er := ioutil.ReadDir(contractDir)
 	if er != nil {
-		err.ErrorCode = types.ErrInvalidParameter
-		err.ErrorDesc = er.Error()
-		return
+		panic(er)
 	} else if len(subDirs) > 2 || (len(subDirs) == 2 && !(subDirs[0].Name() == orgGenesis || subDirs[1].Name() == orgGenesis)) {
+		panic("invalid directory")
+	}
+
+	// check contractName and version
+	if !checkNameAndVersion(subDirs, contractDir, contractName, version) {
 		err.ErrorCode = types.ErrInvalidParameter
-		err.ErrorDesc = "invalid directory"
+		err.ErrorDesc = "invalid contractName or version"
 		return
 	}
 
 	results = make([]std.GenResult, 0)
+	var another string
+	totalResList := make([]*parsecode.Result, 0)
 	for _, dir := range subDirs {
-		totalResList := make([]*parsecode.Result, 0)
 
 		firstContractPath := filepath.Join(contractDir, dir.Name())
 		codePath := filepath.Join(firstContractPath, "code")
 		contractDirs, er := ioutil.ReadDir(codePath)
 		if er != nil {
-			err.ErrorCode = types.ErrInvalidParameter
-			err.ErrorDesc = er.Error()
-			return
+			panic(er)
 		}
 
+		//packageNameMap := make(map[string]struct{})
+		//contractNameMap := make(map[string]struct{})
 		for _, contractPath := range contractDirs {
-			resList, er := genWithContractPath(filepath.Join(codePath, contractPath.Name()))
-			if er != nil {
-				err.ErrorCode = types.ErrInvalidParameter
-				err.ErrorDesc = er.Error()
+			var resList []*parsecode.Result
+			resList, err = checkAndAutoGen(filepath.Join(codePath, contractPath.Name()))
+			if err.ErrorCode != types.CodeOK {
 				return
 			}
 
+			// ????
+			//for _, r := range resList {
+			//	if _, ok := contractNameMap[r.ContractName]; !ok {
+			//		if _, ok := packageNameMap[r.PackageName]; ok {
+			//			err.ErrorCode = types.ErrInvalidParameter
+			//			err.ErrorDesc = "Package names for different contracts under the same organization cannot be repeated"
+			//			return
+			//		} else {
+			//			packageNameMap[r.PackageName] = struct{}{}
+			//		}
+			//		contractNameMap[r.ContractName] = struct{}{}
+			//	}
+			//}
+
 			// get methods and interfaces
-			results = append(results, getGenResult(resList))
+			results = append(results, getGenResult(resList)...)
 
 			totalResList = append(totalResList, resList...)
 		}
 
 		// generate contract stub factory
 		stubPath := filepath.Join(contractDir, dir.Name()+"/stub")
-		er = genstub.GenConStFactory(totalResList, stubPath)
-		if er != nil {
-			err.ErrorCode = types.ErrInvalidParameter
-			err.ErrorDesc = er.Error()
-			return
+		if another == "" {
+			another = stubPath
+		} else {
+			genstub.GenConStFactory(totalResList, another)
 		}
+		genstub.GenConStFactory(totalResList, stubPath)
 
 		for _, res := range totalResList {
 			for index := range res.ImportContracts {
-				inPath := filepath.Join(filepath.Join(filepath.Join(codePath, res.DirectionName), "v"+res.Version), res.DirectionName)
-				er = gen.GenImport(inPath, res, totalResList, contractInfoList, index)
-				if er != nil {
-					err.ErrorCode = types.ErrInvalidParameter
-					err.ErrorDesc = er.Error()
-					return
+				if res.OrgID == dir.Name() {
+					inPath := filepath.Join(filepath.Join(filepath.Join(codePath, res.DirectionName), "v"+res.Version), res.DirectionName)
+					er := gen.GenImport(inPath, res, totalResList, contractInfoList, index)
+					if er != nil {
+						err.ErrorCode = types.ErrInvalidParameter
+						err.ErrorDesc = er.Error()
+						return
+					}
 				}
 			}
 		}
 	}
 
 	// generate stub common
-	er = genstub.GenStubCommon(filepath.Join(contractDir, "stubcommon"))
-	if er != nil {
-		err.ErrorCode = types.ErrInvalidParameter
-		err.ErrorDesc = er.Error()
-		return
-	}
+	genstub.GenStubCommon(filepath.Join(contractDir, "stubcommon"))
 
 	// generate cmd
 	stubName := subDirs[0].Name()
@@ -96,137 +111,203 @@ func Gen(contractDir string, contractInfoList []gen.ContractInfo) (results []std
 			stubName = subDirs[1].Name()
 		}
 	}
-	er = gencmd.GenCmd(filepath.Dir(contractDir), stubName)
-	if er != nil {
-		err.ErrorCode = types.ErrInvalidParameter
-		err.ErrorDesc = er.Error()
-	}
+	gencmd.GenCmd(filepath.Dir(contractDir), stubName)
 
 	return
 }
 
-// genWithContractPath - generate auto gen code and stub code
-func genWithContractPath(contractPath string) (resList []*parsecode.Result, err error) {
+// checkAndAutoGen - generate auto gen code and stub code
+func checkAndAutoGen(contractPath string) (resList []*parsecode.Result, err types.Error) {
 
-	versionDirs, err := ioutil.ReadDir(contractPath)
-	if err != nil {
-		return
+	versionDirs, er := ioutil.ReadDir(contractPath)
+	if er != nil {
+		panic(er)
 	}
 
 	resList = make([]*parsecode.Result, 0)
 	for _, versionDir := range versionDirs {
 		versionPath := filepath.Join(contractPath, versionDir.Name())
 		var secDir []os.FileInfo
-		secDir, err = ioutil.ReadDir(versionPath)
-		if err != nil {
-			return
+		secDir, er = ioutil.ReadDir(versionPath)
+		if er != nil {
+			panic(er)
 		} else if len(secDir) != 1 {
-			return nil, errors.New("invalid path " + versionPath)
+			panic("invalid path " + versionPath)
 		}
 
 		secPath := filepath.Join(versionPath, secDir[0].Name())
-		res, Err := parsecode.Check(secPath)
-		if Err.ErrorCode != types.CodeOK {
-			return nil, errors.New(Err.ErrorDesc)
+		var res *parsecode.Result
+		res, err = parsecode.Check(secPath)
+		if err.ErrorCode != types.CodeOK {
+			return
 		}
 		res.DirectionName = secDir[0].Name()
 		resList = append(resList, res)
 
-		err = genAutoGenCode(secPath, res)
-		if err != nil {
-			return
-		}
-
 		stubPath := filepath.Join(filepath.Dir(filepath.Dir(contractPath)), "stub")
-		Err = parsecode.Versions(contractPath, res)
-		if Err.ErrorCode != types.CodeOK {
-			return nil, errors.New(Err.ErrorDesc)
-		}
-
-		err = genStubCode(stubPath, res)
-		if err != nil {
+		err = parsecode.CheckVersions(contractPath, res)
+		if err.ErrorCode != types.CodeOK {
 			return
 		}
+
+		// auto gen
+		genAutoGenCode(secPath, res)
+		genStubCode(stubPath, res)
 	}
 
 	return
 }
 
 // genAutoGenCode - generate contract assist code
-func genAutoGenCode(secPath string, res *parsecode.Result) (err error) {
+func genAutoGenCode(secPath string, res *parsecode.Result) {
 
-	err = gen.GenReceipt(secPath, res)
-	if err != nil {
-		return
-	}
+	gen.GenReceipt(secPath, res)
 
-	err = gen.GenSDK(secPath, res)
-	if err != nil {
-		return
-	}
+	gen.GenSDK(secPath, res)
 
-	err = gen.GenStore(secPath, res)
-	if err != nil {
-		return
-	}
+	gen.GenStore(secPath, res)
 
-	err = gen.GenTypes(secPath, res)
-	if err != nil {
-		return
-	}
-
-	return
+	gen.GenTypes(secPath, res)
 }
 
 // genStubCode - generate stub code
-func genStubCode(stubPath string, res *parsecode.Result) (err error) {
+func genStubCode(stubPath string, res *parsecode.Result) {
 	stubConPath := filepath.Join(stubPath, res.DirectionName)
 
-	err = genstub.GenMethodStub(res, stubConPath)
-	if err != nil {
-		return
-	}
+	genstub.GenMethodStub(res, stubConPath)
 
-	err = genstub.GenInterfaceStub(res, stubConPath)
-	if err != nil {
-		return
-	}
+	genstub.GenInterfaceStub(res, stubConPath)
 
-	err = genstub.GenStFactory(res, stubConPath)
-	if err != nil {
-		return
+	genstub.GenStFactory(res, stubConPath)
+}
+
+// getGenResult - get gen result
+func getGenResult(resList []*parsecode.Result) (genResult []std.GenResult) {
+	genResult = make([]std.GenResult, 0)
+	for _, res := range resList {
+		item := std.GenResult{}
+		item.ContractName = res.ContractName
+		item.Version = res.Version
+		item.OrgID = res.OrgID
+		item.Methods = make([]std.Method, 0)
+		item.Interfaces = make([]std.Method, 0)
+		item.Mine = make([]std.Method, 0)
+
+		for _, function := range res.MFunctions {
+			proto := parsecode.CreatePrototype(function.Method)
+			method := std.Method{
+				Gas:       function.MGas,
+				ProtoType: proto,
+				MethodID:  fmt.Sprintf("%x", parsecode.CalcMethodID(proto))}
+
+			item.Methods = append(item.Methods, method)
+		}
+
+		for _, function := range res.IFunctions {
+			proto := parsecode.CreatePrototype(function.Method)
+			method := std.Method{
+				Gas:       function.IGas,
+				ProtoType: proto,
+				MethodID:  fmt.Sprintf("%x", parsecode.CalcMethodID(proto))}
+
+			item.Interfaces = append(item.Interfaces, method)
+		}
+
+		if res.IsExistMine == true {
+			proto := parsecode.CreatePrototype(res.Mine.Method)
+			item.Mine = append(item.Mine, std.Method{
+				ProtoType: proto,
+				MethodID:  fmt.Sprintf("%x", parsecode.CalcMethodID(proto)),
+			})
+		}
+
+		genResult = append(genResult, item)
 	}
 
 	return
 }
 
-// getGenResult - get gen result
-func getGenResult(resList []*parsecode.Result) (genResult std.GenResult) {
-	for _, res := range resList {
+func checkNameAndVersion(subDirs []os.FileInfo, contractDir, contractName, version string) bool {
+	if len(contractName) == 0 && len(version) == 0 {
+		return true
+	}
 
-		genResult.ContractName = res.ContractName
-		genResult.Version = res.Version
-		genResult.OrgID = res.OrgID
-		genResult.Methods = make([]std.Method, 0)
-		genResult.Interfaces = make([]std.Method, 0)
+	for _, dir := range subDirs {
+		firstContractPath := filepath.Join(contractDir, dir.Name())
+		codePath := filepath.Join(firstContractPath, "code")
+		contractDirs, er := ioutil.ReadDir(codePath)
+		if er != nil {
+			panic(er)
+		}
 
-		for _, function := range res.Functions {
-			proto := parsecode.CreatePrototype(function.Method)
-			method := std.Method{
-				ProtoType: proto,
-				MethodID:  fmt.Sprintf("%x", parsecode.CalcMethodID(proto))}
+		for _, contractPath := range contractDirs {
+			if contractPath.Name() == contractName {
+				lv, err := getLatestVersion(codePath, contractPath.Name())
+				if err != nil {
+					panic(err)
+				}
 
-			if function.MGas != 0 {
-				method.Gas = function.MGas
-				genResult.Methods = append(genResult.Methods, method)
-			}
-
-			if function.IGas != 0 {
-				method.Gas = function.IGas
-				genResult.Interfaces = append(genResult.Interfaces, method)
+				if version == lv {
+					return true
+				}
 			}
 		}
 	}
 
-	return
+	return false
+}
+
+func getLatestVersion(root, contractName string) (string, error) {
+
+	versionDirs, er := ioutil.ReadDir(filepath.Join(root, contractName))
+	if er != nil {
+		panic(er)
+	}
+
+	var latestVer string
+	for _, v := range versionDirs {
+		path := filepath.Join(root, contractName, v.Name(), contractName)
+		tempVer, err := getVersion(path)
+		if err != nil {
+			return "", err
+		}
+
+		if versions.GreaterThan(tempVer, latestVer) {
+			latestVer = tempVer
+		}
+	}
+
+	return latestVer, nil
+}
+
+func getVersion(path string) (string, error) {
+	var v string
+	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			contents, err := ioutil.ReadFile(path)
+			if err != nil {
+				panic(err)
+			}
+
+			contentStr := string(contents)
+			contentSplit := strings.Split(contentStr, "\n")
+			if len(contentSplit) == 1 {
+				contentSplit = strings.Split(contentStr, "\r\n")
+			}
+
+			for _, line := range contentSplit {
+				if strings.HasPrefix(line, "//@:version:") {
+					v = line[len("//@:version:"):]
+					break
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return v, nil
 }

@@ -30,7 +30,7 @@ func TestLoadBlockStoreStateJSON(t *testing.T) {
 func TestNewBlockStore(t *testing.T) {
 	db := db.NewMemDB()
 	db.Set(blockStoreKey, []byte(`{"height": 10000}`))
-	bs := NewBlockStore(db)
+	bs := NewBlockStore(db, db)
 	require.Equal(t, int64(10000), bs.Height(), "failed to properly parse blockstore")
 
 	panicCausers := []struct {
@@ -45,7 +45,7 @@ func TestNewBlockStore(t *testing.T) {
 		// Expecting a panic here on trying to parse an invalid blockStore
 		_, _, panicErr := doFn(func() (interface{}, error) {
 			db.Set(blockStoreKey, tt.data)
-			_ = NewBlockStore(db)
+			_ = NewBlockStore(db, db)
 			return nil, nil
 		})
 		require.NotNil(t, panicErr, "#%d panicCauser: %q expected a panic", i, tt.data)
@@ -53,17 +53,17 @@ func TestNewBlockStore(t *testing.T) {
 	}
 
 	db.Set(blockStoreKey, nil)
-	bs = NewBlockStore(db)
+	bs = NewBlockStore(db, db)
 	assert.Equal(t, bs.Height(), int64(0), "expecting nil bytes to be unmarshaled alright")
 }
 
 func freshBlockStore() (*BlockStore, db.DB) {
 	db := db.NewMemDB()
-	return NewBlockStore(db), db
+	return NewBlockStore(db, db), db
 }
 
 var (
-	state, _ = makeStateAndBlockStore(log.NewTMLogger(new(bytes.Buffer)))
+	state, _ = makeStateAndBlockStore(log.NewOldTMLogger(new(bytes.Buffer)))
 
 	block       = makeBlock(1, state)
 	partSet     = block.MakePartSet(2)
@@ -76,7 +76,7 @@ var (
 // TODO: This test should be simplified ...
 
 func TestBlockStoreSaveLoadBlock(t *testing.T) {
-	state, bs := makeStateAndBlockStore(log.NewTMLogger(new(bytes.Buffer)))
+	state, bs := makeStateAndBlockStore(log.NewOldTMLogger(new(bytes.Buffer)))
 	require.Equal(t, bs.Height(), int64(0), "initially the height should be zero")
 
 	// check there are no blocks at various heights
@@ -97,7 +97,9 @@ func TestBlockStoreSaveLoadBlock(t *testing.T) {
 
 	incompletePartSet := types.NewPartSetFromHeader(types.PartSetHeader{Total: 2})
 	uncontiguousPartSet := types.NewPartSetFromHeader(types.PartSetHeader{Total: 0})
-	uncontiguousPartSet.AddPart(part2, false)
+	if ok, e := uncontiguousPartSet.AddPart(part2, false); e != nil || !ok {
+		println("uncontiguousPartSet.AddPart(part2, false)")
+	}
 
 	header1 := types.Header{
 		Height:  1,
@@ -329,7 +331,7 @@ func TestLoadBlockMeta(t *testing.T) {
 }
 
 func TestBlockFetchAtHeight(t *testing.T) {
-	state, bs := makeStateAndBlockStore(log.NewTMLogger(new(bytes.Buffer)))
+	state, bs := makeStateAndBlockStore(log.NewOldTMLogger(new(bytes.Buffer)))
 	require.Equal(t, bs.Height(), int64(0), "initially the height should be zero")
 	block := makeBlock(bs.Height()+1, state)
 

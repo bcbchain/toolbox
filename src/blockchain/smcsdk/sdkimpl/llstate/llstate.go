@@ -125,14 +125,24 @@ func (ll *LowLevelSDB) Set(key string, value interface{}) {
 func (ll *LowLevelSDB) McGet(key string, defaultValue interface{}) interface{} {
 	mc := sdkimpl.McInst.NewMc(ll.transID, key)
 	if result := mc.Get(); result != nil {
-		sdkimpl.Logger.Tracef("[sdk][transID=%d][txID=%d] Get key=%s from memory cache, value=%v", ll.transID, ll.txID, key, result)
-		return result
+		err := jsoniter.Unmarshal(result, defaultValue)
+		if err != nil {
+			sdkimpl.Logger.Fatalf("[sdk][transID=%d][txID=%d] Cannot unmarshal from key=%s in mc, error=%v\nbytes=%v", ll.transID, ll.txID, key, err, result)
+			panic(err)
+		}
+		sdkimpl.Logger.Tracef("[sdk][transID=%d][txID=%d] Get key=%s from memory cache, value=%v", ll.transID, ll.txID, key, string(result))
+		return defaultValue
 	}
 
 	if result := ll.Get(key, defaultValue); result != nil {
 		sdkimpl.Logger.Tracef("[sdk][transID=%d][txID=%d] Get key=%s from stateDB, value=%v", ll.transID, ll.txID, key, result)
 
-		mc.Set(ll.txID, result)
+		value, err := jsoniter.Marshal(result)
+		if err != nil {
+			sdkimpl.Logger.Fatalf("[sdk][transID=%d][txID=%d] Cannot marshal set value struct, key=%s, error=%v", ll.transID, ll.txID, key, err)
+			panic(err)
+		}
+		mc.Set(ll.txID, value)
 		return result
 	}
 	sdkimpl.Logger.Tracef("[sdk][transID=%d][txID=%d] Get key=%s failed", ll.transID, ll.txID, key)
@@ -156,8 +166,14 @@ func (ll *LowLevelSDB) McSet(key string, value interface{}) {
 
 	ll.Set(key, value)
 
-	mc.Set(ll.txID, value)
-	sdkimpl.Logger.Debug("Set Memory Cache", "transID", ll.transID, "txID", ll.txID, "key", key, "value", value)
+	valueByte, err := jsoniter.Marshal(value)
+	if err != nil {
+		sdkimpl.Logger.Fatalf("[sdk][transID=%d][txID=%d] Cannot marshal set value struct, key=%s, error=%v", ll.transID, ll.txID, key, err)
+		panic(err)
+	}
+
+	mc.Set(ll.txID, valueByte)
+	sdkimpl.Logger.Trace("Set Memory Cache", "transID", ll.transID, "txID", ll.txID, "key", key, "value", string(valueByte))
 }
 
 // Commit commit all set data

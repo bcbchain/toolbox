@@ -2,6 +2,7 @@ package core
 
 import (
 	"blockchain/smcsdk/sdk/bn"
+	"blockchain/smcsdk/sdk/std"
 	"blockchain/tx2"
 	"cmd/bcc/common"
 	"common/wal"
@@ -120,8 +121,13 @@ func checkPay(pay string) (value bn.Number, token string, err error) {
 			return
 		}
 
+		zeroCount := 0
 		valueStr = strings.Replace(valueStr, ".", "", -1)
-		zeroCount := 9 - (len(valueStr) - potIndex)
+		if potIndex == -1 {
+			zeroCount = 9
+		} else {
+			zeroCount = 9 - (len(valueStr) - potIndex)
+		}
 		for zeroCount > 0 {
 			valueStr += "0"
 			zeroCount--
@@ -178,4 +184,28 @@ func CheckUTF8(buf []byte) bool {
 		}
 	}
 	return nBytes == 0
+}
+
+//  查询方法ID
+func QueryMethodID(orgName, contractName, method, chainID, keyStorePath string, bSmcErr bool) (uint32, error) {
+
+	contract, err := getContract(orgName, contractName, chainID, bSmcErr, keyStorePath)
+	if err != nil {
+		return 0, errors.New("getContract error: " + err.Error())
+	}
+	var item std.Method
+	for _, methodItem := range contract.Methods {
+		if strings.HasPrefix(methodItem.ProtoType, method) {
+			item = methodItem
+			break
+		}
+	}
+
+	if len(item.MethodID) == 0 {
+		return 0, errors.New("invalid method")
+	}
+
+	methodid, _ := requireUint64("methodID", item.MethodID, 16)
+
+	return uint32(methodid), nil
 }

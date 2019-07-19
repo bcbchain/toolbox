@@ -122,7 +122,9 @@ func (bcR *BlockchainReactor) OnStart() error {
 // OnStop implements cmn.Service.
 func (bcR *BlockchainReactor) OnStop() {
 	bcR.BaseReactor.OnStop()
-	bcR.pool.Stop()
+	if e := bcR.pool.Stop(); e != nil {
+		bcR.Logger.Warn(e.Error())
+	}
 }
 
 // GetChannels implements Reactor
@@ -245,7 +247,11 @@ FOR_LOOP:
 			}
 		case <-statusUpdateTicker.C:
 			// ask for status updates
-			go bcR.BroadcastStatusRequest() // nolint: errcheck
+			go func() {
+				if e := bcR.BroadcastStatusRequest(); e != nil {
+					bcR.Logger.Warn(e.Error())
+				}
+			}()
 		case <-switchToConsensusTicker.C:
 			height, numPending, lenRequesters := bcR.pool.GetStatus()
 			outbound, inbound, _ := bcR.Switch.NumPeers()
@@ -253,7 +259,9 @@ FOR_LOOP:
 				"outbound", outbound, "inbound", inbound)
 			if bcR.pool.IsCaughtUp() {
 				bcR.Logger.Info("Time to switch to consensus reactor!", "height", height)
-				bcR.pool.Stop()
+				if e := bcR.pool.Stop(); e != nil {
+					bcR.Logger.Warn(e.Error())
+				}
 
 				conR := bcR.Switch.Reactor("CONSENSUS").(consensusReactor)
 				conR.SwitchToConsensus(state, blocksSynced)
@@ -273,7 +281,7 @@ FOR_LOOP:
 				}
 				firstParts := first.MakePartSet(state.ConsensusParams.BlockPartSizeBytes)
 				firstPartsHeader := firstParts.Header()
-				firstID := types.BlockID{first.Hash(), firstPartsHeader}
+				firstID := types.BlockID{Hash: first.Hash(), PartsHeader: firstPartsHeader}
 				// Finally, verify the first block using the second's commit
 				// NOTE: we can probably make this more efficient, but note that calling
 				// first.Hash() doesn't verify the tx contents, so MakePartSet() is

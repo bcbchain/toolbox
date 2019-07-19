@@ -116,7 +116,7 @@ type storeExport struct {
 func res2Store(res *parsecode.Result) storeExport {
 	store := storeExport{}
 	store.PackageName = res.PackageName
-	store.ReceiverName = res.InitChain.Receiver.Names[0]
+	store.ReceiverName = strings.ToLower(string([]rune(res.ContractStructure)[0]))
 	store.ContractName = res.ContractStructure
 	imports := make(map[parsecode.Import]struct{})
 	stores := make([]parsecode.Field, 0)
@@ -145,7 +145,7 @@ func res2Store(res *parsecode.Result) storeExport {
 	return store
 }
 
-func GenStore(inPath string, res *parsecode.Result) error {
+func GenStore(inPath string, res *parsecode.Result) {
 	filename := filepath.Join(inPath, res.PackageName+"_autogen_store.go")
 
 	funcMap := template.FuncMap{
@@ -172,7 +172,7 @@ func GenStore(inPath string, res *parsecode.Result) error {
 	}
 	tmpl, err := template.New("store").Funcs(funcMap).Parse(storeTemplate)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	store := res2Store(res)
@@ -180,13 +180,12 @@ func GenStore(inPath string, res *parsecode.Result) error {
 	var buf bytes.Buffer
 
 	if err = tmpl.Execute(&buf, store); err != nil {
-		return err
+		panic(err)
 	}
 
 	if err := parsecode.FmtAndWrite(filename, buf.String()); err != nil {
-		return err
+		panic(err)
 	}
-	return nil
 
 }
 

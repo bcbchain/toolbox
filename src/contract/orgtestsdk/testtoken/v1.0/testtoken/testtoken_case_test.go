@@ -104,7 +104,7 @@ func (mysuit *MySuite) TestTestToken_TestOwner(c *check.C) {
 
 	test.obj.sdk.Helper().TokenHelper().RegisterToken("token-test",
 		"test", bn.N(1E15), true, true)
-	test.run().setSender(contractOwner).TestOwner(test.obj.sdk.Message().Contract().Owner())
+	test.run().setSender(contractOwner).TestOwner(test.obj.sdk.Message().Contract().Owner().Address())
 }
 
 // name

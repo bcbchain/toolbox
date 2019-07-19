@@ -33,6 +33,8 @@ type Client struct {
 	mtx     sync.Mutex
 	logger  log.Logger
 
+	isRunning bool
+
 	// close callback function
 	closeCB func(*Client)
 }
@@ -54,6 +56,7 @@ func NewClient(addr string, disableKeepAlive bool, logger log.Logger) (cli *Clie
 		return
 	}
 
+	cli.isRunning = true
 	go cli.recvResponseRoutine()
 
 	return
@@ -66,6 +69,9 @@ func (cli *Client) SetCloseCB(cb func(*Client)) {
 
 // Call call service with method and data
 func (cli *Client) Call(method string, data map[string]interface{}, timeout time.Duration) (value interface{}, err error) {
+	if !cli.isRunning {
+		return nil, errors.New("client is invalid")
+	}
 
 	req := Request{Method: method, Data: data, Index: cli.index()}
 	if cli.disableKeepAlive {
@@ -163,6 +169,7 @@ func (cli *Client) recvResponseRoutine() {
 
 		value, err := readMessage(cli.r)
 		if err != nil {
+			cli.isRunning = false
 			cli.logger.Fatal("readMessage error", "error", err)
 			cli.sendCloseChan(err)
 			return
@@ -171,6 +178,7 @@ func (cli *Client) recvResponseRoutine() {
 		var resp Response
 		err = jsoniter.Unmarshal(value, &resp)
 		if err != nil {
+			cli.isRunning = false
 			cli.logger.Fatal(fmt.Sprintf("value=%v cannot unmarshal to response", value), "error", err)
 			cli.sendCloseChan(err)
 			return

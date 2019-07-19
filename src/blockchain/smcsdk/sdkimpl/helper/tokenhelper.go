@@ -75,7 +75,7 @@ func (th *TokenHelper) RegisterToken(
 		types.ErrInvalidParameter, "This contract never defined standard transfer method")
 
 	// check sender
-	sdk.RequireOwner(th.smc)
+	sdk.RequireOwner()
 
 	// check contract's token
 	sdk.Require(th.smc.Message().Contract().Token() == "",
@@ -94,7 +94,7 @@ func (th *TokenHelper) RegisterToken(
 	tokenAddr := th.smc.Message().Contract().Address()
 	token = object.NewToken(th.smc,
 		tokenAddr,
-		th.smc.Message().Contract().Owner(),
+		th.smc.Message().Contract().Owner().Address(),
 		name,
 		symbol,
 		totalSupply,
@@ -118,7 +118,7 @@ func (th *TokenHelper) RegisterToken(
 	th.smc.Helper().ContractHelper().(*ContractHelper).UpdateContractsToken(token.Address())
 
 	// update owner's balance and account's token key
-	ownerAcct := th.smc.Helper().AccountHelper().AccountOf(token.Owner())
+	ownerAcct := token.Owner()
 	ownerAcct.(*object.Account).SetBalanceOfToken(token.Address(), token.TotalSupply())
 	ownerAcct.(*object.Account).AddAccountTokenKey(std.KeyOfAccountToken(ownerAcct.Address(), tokenAddr))
 
@@ -130,7 +130,7 @@ func (th *TokenHelper) RegisterToken(
 		std.NewToken{
 			TokenAddress:     token.Address(),
 			ContractAddress:  th.smc.Message().Contract().Address(),
-			Owner:            token.Owner(),
+			Owner:            token.Owner().Address(),
 			Name:             name,
 			Symbol:           symbol,
 			TotalSupply:      totalSupply,
@@ -145,7 +145,7 @@ func (th *TokenHelper) RegisterToken(
 		std.Transfer{
 			Token: token.Address(),
 			From:  "",
-			To:    token.Owner(),
+			To:    token.Owner().Address(),
 			Value: totalSupply,
 		},
 	)
@@ -164,7 +164,7 @@ func (th *TokenHelper) Token() sdk.IToken {
 
 // TokenOfAddress get token with address
 func (th *TokenHelper) TokenOfAddress(tokenAddr types.Address) sdk.IToken {
-	sdk.RequireAddress(th.smc, tokenAddr)
+	sdk.RequireAddress(tokenAddr)
 
 	return th.tokenOfAddress(tokenAddr)
 }

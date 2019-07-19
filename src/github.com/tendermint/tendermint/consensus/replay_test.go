@@ -362,7 +362,7 @@ func testHandshakeReplay(t *testing.T, nBlocks int, mode uint) {
 	}
 
 	// now start the app using the handshake - it should sync
-	handshaker := NewHandshaker(stateDB, state, store, nil, config)
+	handshaker := NewHandshaker(stateDB, stateDB, state, store, nil, config)
 	proxyApp := proxy.NewAppConns(clientCreator2, handshaker)
 	if err := proxyApp.Start(); err != nil {
 		t.Fatalf("Error starting proxy app connections: %v", err)
@@ -370,7 +370,7 @@ func testHandshakeReplay(t *testing.T, nBlocks int, mode uint) {
 	defer proxyApp.Stop()
 
 	// get the latest app hash from the app
-	res, err := proxyApp.Query().InfoSync(abci.RequestInfo{""})
+	res, err := proxyApp.Query().InfoSync(abci.RequestInfo{"", "", ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +395,7 @@ func testHandshakeReplay(t *testing.T, nBlocks int, mode uint) {
 
 func applyBlock(stateDB dbm.DB, st sm.State, blk *types.Block, proxyApp proxy.AppConns) sm.State {
 	testPartSize := st.ConsensusParams.BlockPartSizeBytes
-	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
+	blockExec := sm.NewBlockExecutor(stateDB, stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
 	blkID := types.BlockID{blk.Hash(), blk.MakePartSet(testPartSize).Header()}
 	newState, err := blockExec.ApplyBlock(st, blkID, blk)
@@ -416,7 +416,7 @@ func buildAppStateFromChain(proxyApp proxy.AppConns, stateDB dbm.DB,
 	// TODO: get the genesis bytes (https://github.com/tendermint/tendermint/issues/1224)
 	var genesisBytes []byte
 	validators := types.TM2PB.Validators(state.Validators)
-	if _, err := proxyApp.Consensus().InitChainSync(abci.RequestInitChain{validators, "test-chain", genesisBytes}); err != nil {
+	if _, err := proxyApp.Consensus().InitChainSync(abci.RequestInitChain{Validators: validators, ChainId: "test-chain", ChainVersion: 1, AppStateBytes: genesisBytes}); err != nil {
 		panic(err)
 	}
 
@@ -453,7 +453,7 @@ func buildTMStateFromChain(config *cfg.Config, stateDB dbm.DB, state sm.State, c
 	// TODO: get the genesis bytes (https://github.com/tendermint/tendermint/issues/1224)
 	var genesisBytes []byte
 	validators := types.TM2PB.Validators(state.Validators)
-	if _, err := proxyApp.Consensus().InitChainSync(abci.RequestInitChain{validators, "test-chain", genesisBytes}); err != nil {
+	if _, err := proxyApp.Consensus().InitChainSync(abci.RequestInitChain{Validators: validators, ChainId: "test-chain", ChainVersion: 1, AppStateBytes: genesisBytes}); err != nil {
 		panic(err)
 	}
 

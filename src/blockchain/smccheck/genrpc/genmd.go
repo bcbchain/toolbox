@@ -107,7 +107,7 @@ func GenMarkdown(res *parsecode.Result, port int, destDir string) error {
 		return err
 	}
 
-	obj := Res2rpc(res)
+	obj := Res2rpc(res, 0)
 	obj.Port = port
 
 	var buf bytes.Buffer

@@ -18,11 +18,10 @@ import (
 	stubType "contract/stubcommon/types"
 	tmcommon "github.com/tendermint/tmlibs/common"
 	"blockchain/smcsdk/sdk/types"
-	{{if (hasStruct .Functions)}}. "contract/{{$.OrgID}}/code/{{$.DirectionName}}/v{{$.Version}}/{{$.DirectionName}}"{{end}}
-	{{- if (hasInterface .Functions)}}
+	{{- if (hasInterface .IFunctions)}}
 	"contract/{{$.OrgID}}/code/{{$.DirectionName}}/v{{$.Version}}/{{$.DirectionName}}"
 	{{- end}}
-	{{- if (hasResult .Functions)}}
+	{{- if (hasResult .IFunctions)}}
 	"blockchain/smcsdk/sdk/jsoniter"
 	{{- end}}
 )
@@ -51,9 +50,29 @@ func (inter *{{$stubName}}) SetSdk(smc sdk.ISmartContract) {
 	inter.smc = smc
 }
 
+// isCycle
+func (inter *{{$stubName}}) isCycle(origins []types.Address) bool {
+	m := make(map[string]struct{})
+	for _, addr := range origins {
+		if _, ok := m[addr]; ok {
+			return true
+		} else {
+			m[addr] = struct{}{}
+		}
+	}
+
+	return false
+}
+
 //Invoke invoke function
 func (inter *{{$stubName}}) Invoke(methodID string, p interface{}) (response bcType.Response) {
 	defer FuncRecover(&response)
+
+	if inter.isCycle(inter.smc.Message().Origins()) {
+		response.Code = types.ErrStubDefined
+		response.Log = "invoke contract's interface cannot cycle"
+		return
+	}
 
 	if len(inter.smc.Message().Origins()) > 9 {
 		response.Code = types.ErrStubDefined
@@ -74,15 +93,13 @@ func (inter *{{$stubName}}) Invoke(methodID string, p interface{}) (response bcT
 	var data string
 	err = types.Error{ErrorCode:types.CodeOK}
 	switch methodID {
-	{{- range $i,$f := $.Functions}}
-	{{- if $f.IGas}}
+	{{- range $i,$f := $.IFunctions}}
 	case "{{$f.Method | createProto | calcMethodID | printf "%x"}}":	// prototype: {{createProto $f.Method}}
 		{{- if eq (len $f.Results) 1}}
 		data = inter._{{lowerFirst $f.Name}}(inter.smc)
 		{{- else}}
 		inter._{{lowerFirst $f.Name}}(p)
 		{{- end}}
-	{{- end}}
 	{{- end}}
 	default:
 		err.ErrorCode = types.ErrInvalidMethod
@@ -91,12 +108,11 @@ func (inter *{{$stubName}}) Invoke(methodID string, p interface{}) (response bcT
 	return
 }
 
-{{range $i0,$f := $.Functions}}
-{{- if $f.IGas}}
+{{range $i0,$f := $.IFunctions}}
 func (inter *{{$stubName}}) _{{lowerFirst $f.Name}}(p interface{}) {{if (len $f.Results)}}string{{end}} {
 	contractObj := new({{$.PackageName}}.{{$.ContractStruct}})
 	contractObj.SetSdk(inter.smc)
-	param := p.({{$.PackageName}}.{{$f.Name}}Param)
+	{{if (hasParam $f)}}param := p.({{$.PackageName}}.{{$f.Name}}Param){{end}}
 	{{$l := dec (len $f.Results)}}{{if (len $f.Results)}}{{range $i0,$sPara := $f.Results}}rst{{$i0}}{{if lt $i0 $l}},{{end}}{{end}} := {{end}}contractObj.{{$f.Name}}({{$l := (dec (len $f.SingleParams))}}{{range $i0,$sPara := $f.SingleParams}}param.{{$sPara|expandNames|upperFirst}} {{if lt $i0 $l}},{{end}}{{end}})
 	{{- if (len $f.Results)}}
 	resultList := make([]interface{}, 0)
@@ -106,15 +122,14 @@ func (inter *{{$stubName}}) _{{lowerFirst $f.Name}}(p interface{}) {{if (len $f.
 	return string(resBytes)
 	{{- end}}
 }
-{{- end}}
 {{end}}
 `
 
 // GenInterfaceStub - generate the interface stub go source
-func GenInterfaceStub(res *parsecode.Result, outDir string) error {
+func GenInterfaceStub(res *parsecode.Result, outDir string) {
 	newOutDir := filepath.Join(outDir, "v"+res.Version, res.ContractName)
 	if err := os.MkdirAll(newOutDir, os.FileMode(0750)); err != nil {
-		return err
+		panic(err)
 	}
 	filename := filepath.Join(newOutDir, res.PackageName+"stub_interface.go")
 
@@ -130,18 +145,15 @@ func GenInterfaceStub(res *parsecode.Result, outDir string) error {
 		"dec": func(i int) int {
 			return i - 1
 		},
-		"hasInterface": func(functions []FatFunction) bool {
-			for _, function := range functions {
-				if function.IGas != 0 {
-					return true
-				}
-			}
-
-			return false
+		"hasInterface": func(funcs []FatFunction) bool {
+			return len(funcs) != 0
 		},
-		"hasResult": func(functions []FatFunction) bool {
-			for _, function := range functions {
-				if function.IGas != 0 && len(function.Results) > 0 {
+		"hasParam": func(fun FatFunction) bool {
+			return len(fun.Params) != 0
+		},
+		"hasResult": func(funcs []FatFunction) bool {
+			for _, function := range funcs {
+				if len(function.Results) > 0 {
 					return true
 				}
 			}
@@ -151,7 +163,7 @@ func GenInterfaceStub(res *parsecode.Result, outDir string) error {
 	}
 	tmpl, err := template.New("interfaceStub").Funcs(funcMap).Parse(iStubTemplate)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	obj := Res2stub(res)
@@ -159,11 +171,10 @@ func GenInterfaceStub(res *parsecode.Result, outDir string) error {
 	var buf bytes.Buffer
 
 	if err = tmpl.Execute(&buf, obj); err != nil {
-		return err
+		panic(err)
 	}
 
 	if err := parsecode.FmtAndWrite(filename, buf.String()); err != nil {
-		return err
+		panic(err)
 	}
-	return nil
 }

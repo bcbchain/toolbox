@@ -377,8 +377,8 @@ type MempoolConfig struct {
 // DefaultMempoolConfig returns a default configuration for the Tendermint mempool
 func DefaultMempoolConfig() *MempoolConfig {
 	return &MempoolConfig{
-		Recheck:      true,
-		RecheckEmpty: true,
+		Recheck:      false,
+		RecheckEmpty: false,
 		Broadcast:    true,
 		WalPath:      defaultDataDir + "/" + "mempool.wal",
 		CTxCacheTime: 600,

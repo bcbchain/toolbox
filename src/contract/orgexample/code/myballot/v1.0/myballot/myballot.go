@@ -2,6 +2,7 @@ package myballot
 
 import (
 	"blockchain/smcsdk/sdk"
+	"blockchain/smcsdk/sdk/forx"
 	"blockchain/smcsdk/sdk/types"
 )
 
@@ -13,7 +14,7 @@ import (
 type Ballot struct {
 	sdk sdk.ISmartContract
 
-	//chairperson this declares a state variable that stores a chairperson's 
+	//chairperson this declares a state variable that stores a chairperson's
 	//            address for the contract
 	//@:public:store:cache
 	chairperson string
@@ -39,7 +40,7 @@ func (ballot *Ballot) Init(proposalNames []string) {
 	sender := ballot.sdk.Message().Sender().Address()
 
 	// Only cntract's owner can perform init
-	sdk.RequireOwner(ballot.sdk)
+	sdk.RequireOwner()
 
 	proposals := ballot._proposals()
 	sdk.Require(len(proposals) <= 0,
@@ -54,13 +55,13 @@ func (ballot *Ballot) Init(proposalNames []string) {
 
 	// For each of the provided proposal names,
 	// create a new 'Proposal' object and add it to the end of the array
-	for i := 0; i < len(proposalNames); i++ {
+	forx.Range(proposalNames, func(i int, pName string) {
 		proposals = append(proposals,
 			Proposal{
-				name:      proposalNames[i],
+				name:      pName,
 				voteCount: 0,
 			})
-	}
+	})
 	ballot._setProposals(proposals)
 }
 
@@ -88,39 +89,41 @@ func (ballot *Ballot) GiveRightToVote(voterAddr types.Address) {
 func (ballot *Ballot) Delegate(to types.Address) {
 	sender := ballot.sdk.Message().Sender().Address()
 	sendVoter := ballot._voters(sender)
-	
+
 	sdk.Require(sendVoter.voted == false,
 		types.ErrUserDefined, "You already voted.")
 	sdk.Require(to != sender,
 		types.ErrUserDefined, "Self-delegation is disallowed.")
 
-  // Forward the delegation as long as 'to' also delegated.
-  // In general, such loops are very dangerous, because if they run too 
-  // long, they might need more gas than is available in a block.
-  // In this case, the delegation will not be executed, but in other 
-  // situations, such loops might cause a contract to get "stuck" completely.
+	// Forward the delegation as long as 'to' also delegated.
+	// In general, such loops are very dangerous, because if they run too
+	// long, they might need more gas than is available in a block.
+	// In this case, the delegation will not be executed, but in other
+	// situations, such loops might cause a contract to get "stuck" completely.
 	toVoter := ballot._voters(to)
-	for toVoter.delegate != "" {
+	forx.Range(func() bool {
+		return toVoter.delegate != ""
+	}, func(i int) {
 		to = toVoter.delegate
 		toVoter = ballot._voters(to)
 
 		// We found a loop in the delegation, not allowed.
 		sdk.Require(to != sender,
 			types.ErrUserDefined, "Found loop in delegation.")
-	}
+	})
 
 	sendVoter.voted = true
 	sendVoter.delegate = to
 	delegate := toVoter
 	if delegate.voted {
-    // If the delegate already voted,
-    // directly add to the number of votes
+		// If the delegate already voted,
+		// directly add to the number of votes
 		proposals := ballot._proposals()
 		proposals[int(delegate.vote)].voteCount += sendVoter.weight
 		ballot._setProposals(proposals)
 	} else {
-    // If the delegate did not vote yet,
-    // add to her weight.
+		// If the delegate did not vote yet,
+		// add to her weight.
 		delegate.weight += sendVoter.weight
 		ballot._setVoters(to, delegate)
 	}
@@ -133,7 +136,7 @@ func (ballot *Ballot) Delegate(to types.Address) {
 func (ballot *Ballot) Vote(proposal uint) {
 	sender := ballot.sdk.Message().Sender().Address()
 	sendVoter := ballot._voters(sender)
-	
+
 	sdk.Require(sendVoter.voted == false,
 		types.ErrUserDefined, "You already voted.")
 
@@ -152,14 +155,14 @@ func (ballot *Ballot) Vote(proposal uint) {
 //@:public:method:gas[500]
 func (ballot *Ballot) WinningProposal() (winningProposal uint) {
 	var winningVoteCount uint
-	
+
 	proposals := ballot._proposals()
-	for p := 0; p < len(proposals); p++ {
-		if proposals[p].voteCount > winningVoteCount {
-			winningVoteCount = proposals[p].voteCount
-			winningProposal = uint(p)
+	forx.Range(proposals, func(i int, proposal Proposal) {
+		if proposal.voteCount > winningVoteCount {
+			winningVoteCount = proposal.voteCount
+			winningProposal = uint(i)
 		}
-	}
+	})
 	return
 }
 

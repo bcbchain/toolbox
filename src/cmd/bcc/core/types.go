@@ -5,7 +5,8 @@ import (
 	"blockchain/types"
 )
 
-const transferMethodID = "44d8ca60"
+const transferMethodIDV1 = "af0228bc"
+const transferMethodIDV2 = "44d8ca60"
 
 // ----- param struct ----
 type CallParam struct {
@@ -126,16 +127,27 @@ type TxResult struct {
 
 // BlockResult - block struct
 type BlockResult struct {
-	BlockHeight     int64         `json:"blockHeight"`
-	BlockHash       string        `json:"blockHash"`
-	ParentHash      string        `json:"parentHash"`
-	ChainID         string        `json:"chainID"`
-	ValidatorHash   string        `json:"validatorHash"`
-	ConsensusHash   string        `json:"consensusHash"`
-	BlockTime       string        `json:"blockTime"`
-	BlockSize       int           `json:"blockSize"`
-	ProposerAddress types.Address `json:"proposerAddress"`
-	Txs             []TxResult    `json:"txs"`
+	// detail result about height
+	BlockHeight     int64         `json:"blockHeight,omitempty"`
+	BlockHash       string        `json:"blockHash,omitempty"`
+	ParentHash      string        `json:"parentHash,omitempty"`
+	ChainID         string        `json:"chainID,omitempty"`
+	ValidatorHash   string        `json:"validatorHash,omitempty"`
+	ConsensusHash   string        `json:"consensusHash,omitempty"`
+	BlockTime       string        `json:"blockTime,omitempty"`
+	BlockSize       int           `json:"blockSize,omitempty"`
+	ProposerAddress types.Address `json:"proposerAddress,omitempty"`
+	Txs             []TxResult    `json:"txs,omitempty"`
+
+	// simple result contain several blocks
+	Result []simpleBlockResult `json:"result,omitempty"`
+}
+
+// simpleBlockResult simple block information contain height,hash and time
+type simpleBlockResult struct {
+	BlockHeight int64  `json:"blockHeight"`
+	BlockHash   string `json:"blockHash"`
+	BlockTime   string `json:"blockTime"`
 }
 
 // BalanceItemResult - item of all balance struct

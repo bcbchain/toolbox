@@ -4,6 +4,7 @@ import (
 	"blockchain/smcsdk/sdk/types"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -250,7 +251,8 @@ func GetGas(comment string) string {
 func CreatePrototype(item Method) string {
 	proto := item.Name + "("
 
-	for index, param := range item.Params {
+	// in parameters
+	for index1, param := range item.Params {
 		var buf bytes.Buffer
 
 		fSet := token.NewFileSet()
@@ -258,19 +260,51 @@ func CreatePrototype(item Method) string {
 			return ""
 		}
 
-		for index := range param.Names {
+		for index2 := range param.Names {
 			proto += buf.String()
-			if index < len(param.Names)-1 {
+			if index2 < len(param.Names)-1 {
 				proto += ","
 			}
 		}
 
-		if index < len(item.Params)-1 {
+		if index1 < len(item.Params)-1 {
 			proto += ","
 		}
 	}
-
 	proto += ")"
+
+	// result
+	var resultNum int
+	var resultProto string
+	for indexR, result := range item.Results {
+		var buf bytes.Buffer
+		fSet := token.NewFileSet()
+		if err := format.Node(&buf, fSet, result.FieldType); err != nil {
+			return ""
+		}
+
+		if len(result.Names) > 0 {
+			resultNum += len(result.Names)
+			for indexN := range result.Names {
+				resultProto += buf.String()
+				if indexN < len(result.Names)-1 {
+					resultProto += ","
+				}
+			}
+		} else {
+			resultNum += 1
+			resultProto += buf.String()
+		}
+
+		if indexR < len(item.Results)-1 {
+			resultProto += ","
+		}
+	}
+	if resultNum > 1 {
+		resultProto = "(" + resultProto
+		resultProto += ")"
+	}
+	proto += resultProto
 
 	return proto
 }
@@ -339,24 +373,67 @@ func FilterImports(importPath string) bool {
 	return true
 }
 
-// IsStarValueInType check the parameter's type,
-// return true if it's star or map's value is star,
-// else return false
-func IsStarValueInType(f Field) bool {
-	if _, ok := f.FieldType.(*ast.StarExpr); ok {
-		return true
+// nolint unhandled
+// CheckAddress check address and return result
+func CheckOrgID(addr string) error {
+	prefix := "org"
+	if strings.HasPrefix(addr, prefix) == false {
+		return errors.New("Address chainID is error! ")
 	}
 
-	if m, ok := f.FieldType.(*ast.MapType); ok {
-		if m1, ok := m.Value.(*ast.MapType); ok {
-			_, ok = m1.Value.(*ast.StarExpr)
+	base58Addr := strings.Replace(addr, prefix, "", 1)
+	addrData := base58.Decode(base58Addr)
+	addrLen := len(addrData)
+	if addrLen < 4 {
+		return errors.New("Base58Addr parse error! ")
+	}
 
-			return ok
-		} else {
-			_, ok = m.Value.(*ast.StarExpr)
+	r160 := ripemd160.New()
+	r160.Write(addrData[:addrLen-4])
+	md := r160.Sum(nil)
 
-			return ok
+	if bytes.Compare(md[:4], addrData[addrLen-4:]) != 0 {
+		return errors.New("Address checksum is error! ")
+	}
+	return nil
+}
+
+func HaveUserDefinedStruct(method Method) bool {
+	for _, param := range method.Params {
+		if !isBaseType(param.FieldType) {
+			return true
 		}
+	}
+
+	for _, result := range method.Results {
+		if !isBaseType(result.FieldType) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isBaseType(e ast.Expr) bool {
+	fld := Field{FieldType: e}
+
+	if m, ok := fld.FieldType.(*ast.MapType); ok {
+		return isBaseType(m.Key) && isBaseType(m.Value)
+	}
+
+	varType := strings.TrimLeft(ExpandType(fld), "*")
+	varType = strings.TrimLeft(varType, "[]")
+	varType = strings.TrimLeft(varType, "*")
+
+	varTypeSplit := strings.Split(varType, ".")
+	if len(varTypeSplit) == 2 {
+		varType = varTypeSplit[1]
+	} else {
+		varType = varTypeSplit[0]
+	}
+
+	if _, ok := baseTypes[varType]; ok {
+		return true
 	}
 
 	return false

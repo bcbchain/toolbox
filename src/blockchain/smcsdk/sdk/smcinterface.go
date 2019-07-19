@@ -40,6 +40,7 @@ type IMessage interface {
 	Items() []types.HexBytes       //消息的参数数据字段的原始信息
 	GasPrice() int64               //消息的燃料价格
 	Sender() IAccount              //消息发送者的账户信息
+	Payer() IAccount               //手续费支付者的账户信息
 	Origins() []types.Address      //消息完整的调用链（用于记录跨合约调用的合约链）
 	InputReceipts() []types.KVPair //级联消息中前一个消息输出的收据作为本次消息的输入
 
@@ -49,7 +50,7 @@ type IMessage interface {
 // IAccount the interface for Account
 type IAccount interface {
 	Address() types.Address                                                 //账户地址
-	PubKey() types.PubKey                                                   // 账户公钥
+	PubKey() types.PubKey                                                   //账户公钥
 	Balance() bn.Number                                                     //账户当前合约注册的代币的余额（cong）
 	BalanceOfToken(token types.Address) bn.Number                           //根据地址获取代币或基础通证的余额（cong）
 	BalanceOfName(name string) bn.Number                                    //根据名称获取代币或基础通证的余额（cong）
@@ -63,16 +64,17 @@ type IAccount interface {
 // IContract the interface for Contract
 type IContract interface {
 	Address() types.Address       //合约地址
-	Account() types.Address       //合约的账户地址
-	Owner() types.Address         //合约拥有者的账户地址
+	Account() IAccount            //合约的账户对象
+	Owner() IAccount              //合约拥有者的账户对象
 	Name() string                 //合约名称
 	Version() string              //合约版本
 	CodeHash() types.Hash         //合约代码的哈希
-	EffectHeight() int64          ///合约生效的区块高度
+	EffectHeight() int64          //合约生效的区块高度
 	LoseHeight() int64            //合约失效的区块高度
 	KeyPrefix() string            //合约在状态数据库中KEY值的前缀
 	Methods() []std.Method        //合约对外提供接的方法列表
 	Interfaces() []std.Method     //合约对外提供的跨合约调用方法列表
+	Mine() []std.Method           //合约提供的挖矿方法
 	Token() types.Address         //合约代币地址
 	OrgID() string                //组织ID
 	SetOwner(owner types.Address) //修改合约拥有者
@@ -81,7 +83,7 @@ type IContract interface {
 // IToken the interface for Token
 type IToken interface {
 	Address() types.Address               //代币地址
-	Owner() types.Address                 //代币拥有者的账户地址
+	Owner() IAccount                      //代币拥有者的账户对象
 	Name() string                         //代币的名称
 	Symbol() string                       //代币的符号
 	TotalSupply() bn.Number               //代币的总供应量
@@ -176,8 +178,6 @@ type IStateHelper interface {
 	GetUint16(key string) uint16
 	GetUint32(key string) uint32
 	GetUint64(key string) uint64
-	GetFloat32(key string) float32
-	GetFloat64(key string) float64
 	GetByte(key string) byte
 	GetBool(key string) bool
 	GetString(key string) string
@@ -193,8 +193,6 @@ type IStateHelper interface {
 	GetUint16s(key string) []uint16
 	GetUint32s(key string) []uint32
 	GetUint64s(key string) []uint64
-	GetFloat32s(key string) []float32
-	GetFloat64s(key string) []float64
 	GetBytes(key string) []byte
 	GetBools(key string) []bool
 	GetStrings(key string) []string
@@ -213,8 +211,6 @@ type IStateHelper interface {
 	SetUint16(key string, v uint16)
 	SetUint32(key string, v uint32)
 	SetUint64(key string, v uint64)
-	SetFloat32(key string, v float32)
-	SetFloat64(key string, v float64)
 	SetByte(key string, v byte)
 	SetBool(key string, v bool)
 	SetString(key string, v string)
@@ -230,8 +226,6 @@ type IStateHelper interface {
 	SetUint16s(key string, v []uint16)
 	SetUint32s(key string, v []uint32)
 	SetUint64s(key string, v []uint64)
-	SetFloat32s(key string, v []float32)
-	SetFloat64s(key string, v []float64)
 	SetBytes(key string, v []byte)
 	SetBools(key string, v []bool)
 	SetStrings(key string, v []string)
@@ -257,8 +251,6 @@ type IStateHelper interface {
 	McGetUint16(key string) uint16
 	McGetUint32(key string) uint32
 	McGetUint64(key string) uint64
-	McGetFloat32(key string) float32
-	McGetFloat64(key string) float64
 	McGetByte(key string) byte
 	McGetBool(key string) bool
 	McGetString(key string) string
@@ -274,8 +266,6 @@ type IStateHelper interface {
 	McGetUint16s(key string) []uint16
 	McGetUint32s(key string) []uint32
 	McGetUint64s(key string) []uint64
-	McGetFloat32s(key string) []float32
-	McGetFloat64s(key string) []float64
 	McGetBytes(key string) []byte
 	McGetBools(key string) []bool
 	McGetStrings(key string) []string
@@ -294,8 +284,6 @@ type IStateHelper interface {
 	McSetUint16(key string, v uint16)
 	McSetUint32(key string, v uint32)
 	McSetUint64(key string, v uint64)
-	McSetFloat32(key string, v float32)
-	McSetFloat64(key string, v float64)
 	McSetByte(key string, v byte)
 	McSetBool(key string, v bool)
 	McSetString(key string, v string)
@@ -311,8 +299,6 @@ type IStateHelper interface {
 	McSetUint16s(key string, v []uint16)
 	McSetUint32s(key string, v []uint32)
 	McSetUint64s(key string, v []uint64)
-	McSetFloat32s(key string, v []float32)
-	McSetFloat64s(key string, v []float64)
 	McSetBytes(key string, v []byte)
 	McSetBools(key string, v []bool)
 	McSetStrings(key string, v []string)

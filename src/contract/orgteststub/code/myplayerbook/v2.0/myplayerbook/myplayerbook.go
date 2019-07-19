@@ -1,6 +1,8 @@
 package myplayerbook
 
 import (
+	"blockchain/smcsdk/sdk/forx"
+	"blockchain/smcsdk/sdk/std"
 	"bytes"
 	"fmt"
 
@@ -73,11 +75,14 @@ func (pb *MyPlayerBook) MultiTypesParam(index uint64, flt float64, bl bool, bt b
 
 func (m *myType) bRegistrationFee(smcAPI sdk.IMessage) bool {
 	feeReceipts := smcAPI.GetTransferToMe()
-	for _, feeReceipt := range feeReceipts {
+	forx.Range(feeReceipts, func(index int, feeReceipt *std.Transfer) bool {
 		if feeReceipt != nil && feeReceipt.Value.CmpI(registrationFee) >= 0 {
 			return true
 		}
-	}
+
+		return true
+	})
+
 	return false
 }
 
@@ -135,7 +140,7 @@ func nameFilter(_input string) (_name string, _err string) { // nolint gocyclo
 	_hasFullNumber := true
 
 	// convert & check
-	for i := 0; i < _length; i++ {
+	forx.Range(_length, func(i int) bool {
 		// if its uppercase A-Z
 		if _temp[i] >= 'A' && _temp[i] <= 'Z' {
 			// convert to lower case a-z
@@ -151,14 +156,14 @@ func nameFilter(_input string) (_name string, _err string) { // nolint gocyclo
 				(_temp[i] >= 'a' && _temp[i] <= 'z') ||
 				(_temp[i] >= '0' && _temp[i] <= '9')) {
 				_err = "string contains invalid characters"
-				return
+				return forx.Break
 			}
 
 			// make sure theres not 2x spaces in a row
 			if _temp[i] == ' ' {
 				if _temp[i+1] == ' ' {
 					_err = "string cannot contain consecutive spaces"
-					return
+					return forx.Break
 				}
 			}
 
@@ -167,7 +172,9 @@ func nameFilter(_input string) (_name string, _err string) { // nolint gocyclo
 				_hasFullNumber = false
 			}
 		}
-	}
+
+		return true
+	})
 
 	if _hasFullNumber == true {
 		_err = "string cannot be only numbers"

@@ -6,6 +6,7 @@ import (
 	"hash/crc32"
 	"io"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,7 +48,7 @@ func (cs *ConsensusState) readReplayMessage(msg *TimedWALMessage, newStepCh chan
 	// for logging
 	switch m := msg.Msg.(type) {
 	case types.EventDataRoundState:
-		cs.Logger.Info("Replay: New Step", "height", m.Height, "round", m.Round, "step", m.Step)
+		cs.Logger.Debug("Replay: New Step", "height", m.Height, "round", m.Round, "step", m.Step)
 		// these are playback checks
 		ticker := time.After(time.Second * 2)
 		if newStepCh != nil {
@@ -69,13 +70,13 @@ func (cs *ConsensusState) readReplayMessage(msg *TimedWALMessage, newStepCh chan
 		switch msg := m.Msg.(type) {
 		case *ProposalMessage:
 			p := msg.Proposal
-			cs.Logger.Info("Replay: Proposal", "height", p.Height, "round", p.Round, "header",
+			cs.Logger.Debug("Replay: Proposal", "height", p.Height, "round", p.Round, "header",
 				p.BlockPartsHeader, "pol", p.POLRound, "peer", peerID)
 		case *BlockPartMessage:
-			cs.Logger.Info("Replay: BlockPart", "height", msg.Height, "round", msg.Round, "peer", peerID)
+			cs.Logger.Debug("Replay: BlockPart", "height", msg.Height, "round", msg.Round, "peer", peerID)
 		case *VoteMessage:
 			v := msg.Vote
-			cs.Logger.Info("Replay: Vote", "height", v.Height, "round", v.Round, "type", v.Type,
+			cs.Logger.Debug("Replay: Vote", "height", v.Height, "round", v.Round, "type", v.Type,
 				"blockID", v.BlockID, "peer", peerID)
 		}
 
@@ -189,6 +190,7 @@ func makeHeightSearchFunc(height int64) auto.SearchFunc {
 
 type Handshaker struct {
 	stateDB      dbm.DB
+	stateDBx     dbm.DB
 	initialState sm.State
 	store        types.BlockStore
 	genDoc       *types.GenesisDoc
@@ -199,7 +201,7 @@ type Handshaker struct {
 	rpcPort string
 }
 
-func NewHandshaker(stateDB dbm.DB, state sm.State, store types.BlockStore, genDoc *types.GenesisDoc, conf *config.Config) *Handshaker {
+func NewHandshaker(stateDBx dbm.DB, stateDB dbm.DB, state sm.State, store types.BlockStore, genDoc *types.GenesisDoc, conf *config.Config) *Handshaker {
 
 	var err error
 	blob := genDoc.AppStateJSON
@@ -215,6 +217,7 @@ func NewHandshaker(stateDB dbm.DB, state sm.State, store types.BlockStore, genDo
 	genDoc.AppStateJSON = blob
 	return &Handshaker{
 		stateDB:      stateDB,
+		stateDBx:     stateDBx,
 		initialState: state,
 		store:        store,
 		genDoc:       genDoc,
@@ -295,10 +298,12 @@ func (h *Handshaker) ReplayBlocks(state sm.State, appStateData []byte, appBlockH
 			})
 		}
 
+		chainVersion, _ := strconv.ParseInt(h.genDoc.ChainVersion, 0, 64)
+
 		req := abci.RequestInitChain{
 			Validators:    validators,
 			ChainId:       h.initialState.ChainID,
-			ChainVersion:  h.initialState.ChainVersion,
+			ChainVersion:  chainVersion,
 			AppStateBytes: h.genDoc.AppStateJSON,
 		}
 		res, err := proxyApp.Consensus().InitChainSync(req)
@@ -317,13 +322,13 @@ func (h *Handshaker) ReplayBlocks(state sm.State, appStateData []byte, appBlockH
 	if storeBlockHeight == 0 && len(state.LastAppHash) == 0 {
 		//Write GenAppState to stateDB for the first block
 		state.LastAppHash = appHash
-		sm.SaveState(h.stateDB, state)
+		sm.SaveState(h.stateDBx, state)
 		h.logger.Info("InitChain", "AppHash", appHash)
 		return appHash, checkAppHash(state, appHash)
 
 	} else if storeBlockHeight < appBlockHeight {
 		// the app should never be ahead of the store (but this is under app's control)
-		return appHash, sm.ErrAppBlockHeightTooHigh{storeBlockHeight, appBlockHeight}
+		return appHash, sm.ErrAppBlockHeightTooHigh{CoreHeight: storeBlockHeight, AppHeight: appBlockHeight}
 
 	} else if storeBlockHeight < stateBlockHeight {
 		// the state should never be ahead of the store (this is under tendermint's control)
@@ -440,7 +445,7 @@ func (h *Handshaker) replayBlock(state sm.State, height int64, proxyApp proxy.Ap
 	block := h.store.LoadBlock(height)
 	meta := h.store.LoadBlockMeta(height)
 
-	blockExec := sm.NewBlockExecutor(h.stateDB, h.logger, proxyApp, types.MockMempool{}, types.MockEvidencePool{})
+	blockExec := sm.NewBlockExecutor(h.stateDBx, h.stateDB, h.logger, proxyApp, types.MockMempool{}, types.MockEvidencePool{})
 
 	var err error
 	state, err = blockExec.ApplyBlock(state, meta.BlockID, block)

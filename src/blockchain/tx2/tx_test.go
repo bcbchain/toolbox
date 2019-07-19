@@ -99,7 +99,7 @@ func TestRegisterOrg(t *testing.T) {
 	Init("bcb")
 	crypto.SetChainId("bcb")
 
-	methodID1 := algorithm.BytesToUint32(algorithm.CalcMethodId("RegisterOrganization(string)"))
+	methodID1 := algorithm.BytesToUint32(algorithm.CalcMethodId("RegisterOrganization(string)string"))
 	toContract1 := "bcb7ygeQKjX3373FhJtFrFpEtUz2Esf7viJi"
 
 	//toAccount := "bcb7ygeQKjX3373FhJtFrFpEtUz2Esf7viJi"
@@ -307,7 +307,7 @@ func TestDepLoyContract(t *testing.T) {
 	Init("bcb")
 	crypto.SetChainId("bcb")
 
-	methodID1 := algorithm.BytesToUint32(algorithm.CalcMethodId("DeployContract(string,string,string,types.Hash,[]byte,string,string,int64,types.Address)"))
+	methodID1 := algorithm.BytesToUint32(algorithm.CalcMethodId("DeployContract(string,string,string,types.Hash,[]byte,string,string,int64,types.Address)types.Address"))
 	toContract1 := "bcbKrNwxKaummdWtZ3dcqWEwFuW2YMDMDXBL" // smartcontract address
 
 	//toAccount := "bcb7ygeQKjX3373FhJtFrFpEtUz2Esf7viJi"

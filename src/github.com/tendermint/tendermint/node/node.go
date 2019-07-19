@@ -140,13 +140,19 @@ func NewNode(config *cfg.Config,
 	if err != nil {
 		return nil, err
 	}
-	blockStore := bc.NewBlockStore(blockStoreDB)
 
-	// Get State
+	// Get State(old, data with height)
 	stateDB, err := dbProvider(&DBContext{"state", config})
 	if err != nil {
 		return nil, err
 	}
+	// Get State
+	stateDBx, err := dbProvider(&DBContext{"state2", config})
+	if err != nil {
+		return nil, err
+	}
+
+	blockStore := bc.NewBlockStore(stateDBx, blockStoreDB)
 
 	// Get genesis doc
 	// TODO: move to state package?
@@ -162,7 +168,7 @@ func NewNode(config *cfg.Config,
 	}
 
 	crypto.SetChainId(genDoc.ChainID)
-	state, err := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
+	state, err := sm.LoadStateFromDBOrGenesisDoc(stateDBx, stateDB, genDoc)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +177,7 @@ func NewNode(config *cfg.Config,
 	// and sync tendermint and the app by performing a handshake
 	// and replaying any necessary blocks
 	consensusLogger := logger.With("module", "consensus")
-	handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc, config)
+	handshaker := cs.NewHandshaker(stateDBx, stateDB, state, blockStore, genDoc, config)
 	handshaker.SetLogger(consensusLogger)
 	proxyApp := proxy.NewAppConns(clientCreator, handshaker)
 	proxyApp.SetLogger(logger.With("module", "proxy"))
@@ -180,7 +186,7 @@ func NewNode(config *cfg.Config,
 	}
 
 	// reload the state (it may have been updated by the handshake)
-	state = sm.LoadState(stateDB)
+	state = sm.LoadState(stateDBx)
 
 	// If an address is provided, listen on the socket for a
 	// connection from an external signing process.
@@ -239,14 +245,14 @@ func NewNode(config *cfg.Config,
 	}
 	evidenceLogger := logger.With("module", "evidence")
 	evidenceStore := evidence.NewEvidenceStore(evidenceDB)
-	evidencePool := evidence.NewEvidencePool(stateDB, evidenceStore)
+	evidencePool := evidence.NewEvidencePool(stateDBx, stateDB, evidenceStore)
 	evidencePool.SetLogger(evidenceLogger)
 	evidenceReactor := evidence.NewEvidenceReactor(evidencePool)
 	evidenceReactor.SetLogger(evidenceLogger)
 
 	blockExecLogger := logger.With("module", "state")
 	// make block executor for consensus and blockchain reactors to execute blocks
-	blockExec := sm.NewBlockExecutor(stateDB, blockExecLogger, proxyApp.Consensus(), mempool, evidencePool)
+	blockExec := sm.NewBlockExecutor(stateDBx, stateDB, blockExecLogger, proxyApp.Consensus(), mempool, evidencePool)
 
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
@@ -456,7 +462,9 @@ func (n *Node) OnStop() {
 
 	n.Logger.Info("Stopping Node")
 	// TODO: gracefully disconnect from peers.
-	n.sw.Stop()
+	if e := n.sw.Stop(); e != nil {
+		println("n.sw.Stop CAUSE ERROR")
+	}
 
 	for _, l := range n.rpcListeners {
 		n.Logger.Info("Closing rpc listener", "listener", l)
@@ -465,8 +473,12 @@ func (n *Node) OnStop() {
 		}
 	}
 
-	n.eventBus.Stop()
-	n.indexerService.Stop()
+	if e := n.eventBus.Stop(); e != nil {
+		println(e.Error())
+	}
+	if e := n.indexerService.Stop(); e != nil {
+		println(e.Error())
+	}
 
 	if pvsc, ok := n.privValidator.(*pvm.SocketPV); ok {
 		if err := pvsc.Stop(); err != nil {
@@ -480,7 +492,9 @@ func (n *Node) RunForever() {
 	// Sleep forever and then...
 	cmn.TrapSignal(func(sig os.Signal) {
 		n.Logger.Warn("TERM Signal received, exiting....", "sig", sig)
-		n.Stop()
+		if e := n.Stop(); e != nil {
+			println("n.Stop ERROR")
+		}
 	})
 }
 

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+
 	"github.com/spf13/cobra"
 	nm "github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/version"

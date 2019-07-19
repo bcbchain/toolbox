@@ -69,7 +69,7 @@ func (pv *FilePV) GetPubKey() crypto.PubKey {
 func GenFilePV(filePath string) *FilePV {
 	privKey := crypto.GenPrivKeyEd25519()
 	return &FilePV{
-		Address:  privKey.PubKey().Address(),
+		Address:  privKey.PubKey().Address(crypto.GetChainId()),
 		PubKey:   privKey.PubKey(),
 		PrivKey:  privKey,
 		LastStep: stepNone,

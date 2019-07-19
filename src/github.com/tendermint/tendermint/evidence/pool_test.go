@@ -14,7 +14,7 @@ import (
 
 var mockState = sm.State{}
 
-func initializeValidatorState(valAddr []byte, height int64) dbm.DB {
+func initializeValidatorState(valAddr string, height int64) dbm.DB {
 	stateDB := dbm.NewMemDB()
 
 	// create validator set and state
@@ -47,11 +47,11 @@ func initializeValidatorState(valAddr []byte, height int64) dbm.DB {
 func TestEvidencePool(t *testing.T) {
 	assert := assert.New(t)
 
-	valAddr := []byte("val1")
+	valAddr := "val1"
 	height := int64(5)
 	stateDB := initializeValidatorState(valAddr, height)
 	store := NewEvidenceStore(dbm.NewMemDB())
-	pool := NewEvidencePool(stateDB, store)
+	pool := NewEvidencePool(stateDB, stateDB, store)
 
 	goodEvidence := types.NewMockGoodEvidence(height, 0, valAddr)
 	badEvidence := types.MockBadEvidence{goodEvidence}

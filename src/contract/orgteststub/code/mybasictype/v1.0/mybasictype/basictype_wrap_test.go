@@ -39,7 +39,7 @@ func NewTestObject(sender sdk.IAccount) *TestObject {
 
 //transfer This is a method of TestObject
 func (t *TestObject) transfer(balance bn.Number) *TestObject {
-	t.obj.sdk.Message().Sender().TransferByName(t.obj.sdk.Helper().GenesisHelper().Token().Name(), t.obj.sdk.Message().Contract().Account(), balance)
+	t.obj.sdk.Message().Sender().TransferByName(t.obj.sdk.Helper().GenesisHelper().Token().Name(), t.obj.sdk.Message().Contract().Account().Address(), balance)
 	t.obj.sdk = sdkhelper.OriginNewMessage(t.obj.sdk, t.obj.sdk.Message().Contract(), t.obj.sdk.Message().MethodID(), t.obj.sdk.Message().(*object.Message).OutputReceipts())
 	return t
 }

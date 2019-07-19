@@ -8,6 +8,7 @@ import (
 	dbm "github.com/tendermint/tmlibs/db"
 
 	"bytes"
+
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -27,7 +28,8 @@ the Commit data outside the Block. (TODO)
 // deserializing loaded data, indicating probable corruption on disk.
 */
 type BlockStore struct {
-	db dbm.DB
+	db  dbm.DB // 存带楼层的数据
+	dbx dbm.DB // 存不带楼层的数据，其实是存到stateX内
 
 	mtx    sync.RWMutex
 	height int64
@@ -35,11 +37,15 @@ type BlockStore struct {
 
 // NewBlockStore returns a new BlockStore with the given DB,
 // initialized to the last height that was committed to the DB.
-func NewBlockStore(db dbm.DB) *BlockStore {
-	bsjson := LoadBlockStoreStateJSON(db)
+func NewBlockStore(dbx dbm.DB, db dbm.DB) *BlockStore {
+	bsjson := LoadBlockStoreStateJSON(dbx)
+	if bsjson.Height == 0 {
+		bsjson = LoadBlockStoreStateJSON(db)
+	}
 	return &BlockStore{
 		height: bsjson.Height,
 		db:     db,
+		dbx:    dbx,
 	}
 }
 
@@ -59,7 +65,7 @@ func (bs *BlockStore) LoadBlock(height int64) *types.Block {
 	}
 
 	var block = new(types.Block)
-	buf := []byte{}
+	var buf []byte
 	for i := 0; i < blockMeta.BlockID.PartsHeader.Total; i++ {
 		part := bs.LoadBlockPart(height, i)
 		buf = append(buf, part.Bytes...)
@@ -150,6 +156,7 @@ func (bs *BlockStore) LoadSeenCommit(height int64) *types.Commit {
 func (bs *BlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, seenCommit *types.Commit) {
 	if block == nil {
 		cmn.PanicSanity("BlockStore can only save a non-nil block")
+		return // linter不认识自定义的panic
 	}
 	height := block.Height
 	if g, w := height, bs.Height()+1; g != w {
@@ -185,7 +192,7 @@ func (bs *BlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, s
 	bs.db.Set(calcSeenCommitKey(height), seenCommitBytes)
 
 	// Save new BlockStoreStateJSON descriptor
-	BlockStoreStateJSON{Height: height}.Save(bs.db)
+	BlockStoreStateJSON{Height: height}.Save(bs.dbx)
 
 	// Done!
 	bs.mtx.Lock()
@@ -232,26 +239,26 @@ type BlockStoreStateJSON struct {
 
 // Save persists the blockStore state to the database as JSON.
 func (bsj BlockStoreStateJSON) Save(db dbm.DB) {
-	bytes, err := cdc.MarshalJSON(bsj)
+	byt, err := cdc.MarshalJSON(bsj)
 	if err != nil {
 		cmn.PanicSanity(cmn.Fmt("Could not marshal state bytes: %v", err))
 	}
-	db.SetSync(blockStoreKey, bytes)
+	db.SetSync(blockStoreKey, byt)
 }
 
 // LoadBlockStoreStateJSON returns the BlockStoreStateJSON as loaded from disk.
 // If no BlockStoreStateJSON was previously persisted, it returns the zero value.
 func LoadBlockStoreStateJSON(db dbm.DB) BlockStoreStateJSON {
-	bytes := db.Get(blockStoreKey)
-	if len(bytes) == 0 {
+	byt := db.Get(blockStoreKey)
+	if len(byt) == 0 {
 		return BlockStoreStateJSON{
 			Height: 0,
 		}
 	}
 	bsj := BlockStoreStateJSON{}
-	err := cdc.UnmarshalJSON(bytes, &bsj)
+	err := cdc.UnmarshalJSON(byt, &bsj)
 	if err != nil {
-		panic(fmt.Sprintf("Could not unmarshal bytes: %X", bytes))
+		panic(fmt.Sprintf("Could not unmarshal bytes: %X", byt))
 	}
 	return bsj
 }

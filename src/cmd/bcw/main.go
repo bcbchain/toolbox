@@ -105,7 +105,7 @@ func addImportFlags() {
 	importCmd.PersistentFlags().StringVarP(&keyStorePath, "keystorepath", "k", "", "path of key store")
 	importCmd.PersistentFlags().StringVarP(&walName, "name", "n", "", "name of wallet")
 	importCmd.PersistentFlags().StringVarP(&walPassword, "password", "p", "", "password of wallet")
-	importCmd.PersistentFlags().StringVarP(&PrivateKey, "privkey", "y", "", "hex plaintext of private key ")
+	importCmd.PersistentFlags().StringVarP(&PrivateKey, "privkey", "y", "", "hex plaintext of private key")
 }
 
 func addSignFileFlags() {
@@ -113,7 +113,7 @@ func addSignFileFlags() {
 	signFileCmd.PersistentFlags().StringVarP(&walName, "name", "n", "", "name of wallet")
 	signFileCmd.PersistentFlags().StringVarP(&walPassword, "password", "p", "", "password of wallet")
 	signFileCmd.PersistentFlags().StringVarP(&File, "file", "f", "", "name of signature file")
-	signFileCmd.PersistentFlags().StringVarP(&Mode, "mode", "m", "", "mode of Signature")
+	signFileCmd.PersistentFlags().StringVarP(&Mode, "mode", "m", "", "mode of Signature,\"b\" is binary file,\"t\" is text file")
 
 }
 

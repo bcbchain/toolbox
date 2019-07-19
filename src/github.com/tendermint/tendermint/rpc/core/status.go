@@ -1,6 +1,7 @@
 package core
 
 import (
+	"github.com/tendermint/go-crypto"
 	"time"
 
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
@@ -98,7 +99,7 @@ func Status() (*ctypes.ResultStatus, error) {
 			Syncing:           consensusReactor.FastSync(),
 		},
 		ValidatorInfo: ctypes.ValidatorInfo{
-			Address:     pubKey.Address(),
+			Address:     pubKey.Address(crypto.GetChainId()),
 			PubKey:      pubKey,
 			VotingPower: votingPower,
 			RewardAddr:  rewardAddr,
@@ -112,7 +113,7 @@ func Status() (*ctypes.ResultStatus, error) {
 func validatorAtHeight(h int64) *types.Validator {
 	lastBlockHeight, vals := consensusState.GetValidators()
 
-	privValAddress := pubKey.Address()
+	privValAddress := pubKey.Address(crypto.GetChainId())
 
 	// if we're still at height h, search in the current validator set
 	if lastBlockHeight == h {

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tendermint/go-crypto"
+
 	abcicli "github.com/tendermint/abci/client"
 	abci "github.com/tendermint/abci/types"
 	bc "github.com/tendermint/tendermint/blockchain"
@@ -214,7 +216,7 @@ func validatePrevoteAndPrecommit(t *testing.T, cs *ConsensusState, thisRound, lo
 }
 
 // genesis
-func subscribeToVoter(cs *ConsensusState, addr []byte) chan interface{} {
+func subscribeToVoter(cs *ConsensusState, addr crypto.Address) chan interface{} {
 	voteCh0 := make(chan interface{})
 	err := cs.eventBus.Subscribe(context.Background(), testSubscriber, types.EventQueryVote, voteCh0)
 	if err != nil {
@@ -225,7 +227,7 @@ func subscribeToVoter(cs *ConsensusState, addr []byte) chan interface{} {
 		for v := range voteCh0 {
 			vote := v.(types.EventDataVote)
 			// we only fire for our own votes
-			if bytes.Equal(addr, vote.Vote.ValidatorAddress) {
+			if addr == vote.Vote.ValidatorAddress {
 				voteCh <- v
 			}
 		}
@@ -247,7 +249,7 @@ func newConsensusStateWithConfig(thisConfig *cfg.Config, state sm.State, pv type
 
 func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.State, pv types.PrivValidator, app abci.Application, blockDB dbm.DB) *ConsensusState {
 	// Get BlockStore
-	blockStore := bc.NewBlockStore(blockDB)
+	blockStore := bc.NewBlockStore(blockDB, blockDB)
 
 	// one for mempool, one for consensus
 	mtx := new(sync.Mutex)
@@ -266,7 +268,7 @@ func newConsensusStateWithConfigAndBlockStore(thisConfig *cfg.Config, state sm.S
 
 	// Make ConsensusReactor
 	stateDB := dbm.NewMemDB()
-	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
+	blockExec := sm.NewBlockExecutor(stateDB, stateDB, log.TestingLogger(), proxyAppConnCon, mempool, evpool)
 	cs := NewConsensusState(thisConfig.Consensus, state, blockExec, blockStore, mempool, evpool)
 	cs.SetLogger(log.TestingLogger().With("module", "consensus"))
 	cs.SetPrivValidator(pv)
@@ -347,7 +349,7 @@ func randConsensusNet(nValidators int, testName string, tickerFunc func() Timeou
 	logger := consensusLogger()
 	for i := 0; i < nValidators; i++ {
 		stateDB := dbm.NewMemDB() // each state needs its own db
-		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
+		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, stateDB, genDoc)
 		thisConfig := ResetConfig(cmn.Fmt("%s_%d", testName, i))
 		for _, opt := range configOpts {
 			opt(thisConfig)
@@ -371,7 +373,7 @@ func randConsensusNetWithPeers(nValidators, nPeers int, testName string, tickerF
 	logger := consensusLogger()
 	for i := 0; i < nPeers; i++ {
 		stateDB := dbm.NewMemDB() // each state needs its own db
-		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
+		state, _ := sm.LoadStateFromDBOrGenesisDoc(stateDB, stateDB, genDoc)
 		thisConfig := ResetConfig(cmn.Fmt("%s_%d", testName, i))
 		ensureDir(path.Dir(thisConfig.Consensus.WalFile()), 0700) // dir for wal
 		var privVal types.PrivValidator
@@ -413,7 +415,7 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 		val, privVal := types.RandValidator(randPower, minPower)
 		validators[i] = types.GenesisValidator{
 			PubKey: val.PubKey,
-			Power:  val.VotingPower,
+			Power:  int64(val.VotingPower),
 		}
 		privValidators[i] = privVal
 	}

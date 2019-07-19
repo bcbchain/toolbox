@@ -1,8 +1,9 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
+
 	"github.com/tendermint/go-crypto"
 	cmn "github.com/tendermint/tmlibs/common"
 )
@@ -22,7 +23,7 @@ type Validator struct {
 
 func NewValidator(pubKey crypto.PubKey, votingPower uint64, reward crypto.Address, name string) *Validator {
 	return &Validator{
-		Address:     pubKey.Address(),
+		Address:     pubKey.Address(crypto.GetChainId()),
 		PubKey:      pubKey,
 		VotingPower: votingPower,
 		RewardAddr:  reward,
@@ -40,15 +41,15 @@ func (v *Validator) Copy() *Validator {
 
 // Returns the one with higher Accum.
 func (v *Validator) CompareAccum(other *Validator) *Validator {
-	if v == nil {
-		return other
+	if other == nil {
+		return v
 	}
 	if v.Accum > other.Accum {
 		return v
 	} else if v.Accum < other.Accum {
 		return other
 	} else {
-		result := bytes.Compare([]byte(v.Address), []byte(other.Address))
+		result := strings.Compare(v.Address, other.Address)
 		if result < 0 {
 			return v
 		} else if result > 0 {

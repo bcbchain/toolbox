@@ -50,7 +50,7 @@ func (t *TestContractHelper) runCasesContractOfAddress() {
 	fmt.Println("\nTest Case: 根据地址构造合约对象，runCasesContractOfAddress()")
 
 	chainID := t.sdk.Helper().GenesisHelper().ChainID()
-	tempAddr := algorithm.CalcContractAddress(chainID, t.sdk.Helper().GenesisHelper().Token().Owner(), "test", "1.0")
+	tempAddr := algorithm.CalcContractAddress(chainID, t.sdk.Helper().GenesisHelper().Token().Owner().Address(), "test", "1.0")
 
 	var cases = []struct {
 		addr    types.Address
@@ -89,7 +89,7 @@ func (t *TestContractHelper) runCasesContractOfToken() {
 	fmt.Println("\nTest Case: 根据代币地址构造合约对象，runCasesContractOfToken()")
 
 	chainID := t.sdk.Helper().GenesisHelper().ChainID()
-	tempAddr := algorithm.CalcContractAddress(chainID, t.sdk.Helper().GenesisHelper().Token().Owner(), "test", "1.0")
+	tempAddr := algorithm.CalcContractAddress(chainID, t.sdk.Helper().GenesisHelper().Token().Owner().Address(), "test", "1.0")
 
 	hasToken := false
 	if t.sdk.Message().Contract().Token() != "" {

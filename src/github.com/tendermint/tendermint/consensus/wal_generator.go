@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/tendermint/tendermint/proxy"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/tendermint/tendermint/proxy"
 
 	"github.com/pkg/errors"
 	"github.com/tendermint/abci/example/kvstore"
@@ -51,8 +52,8 @@ func WALWithNBlocks(numBlocks int) (data []byte, err error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to make genesis state")
 	}
-	blockStore := bc.NewBlockStore(blockStoreDB)
-	handshaker := NewHandshaker(stateDB, state, blockStore, genDoc, config)
+	blockStore := bc.NewBlockStore(stateDB, blockStoreDB)
+	handshaker := NewHandshaker(stateDB, stateDB, state, blockStore, genDoc, config)
 	proxyApp := proxy.NewAppConns(proxy.NewLocalClientCreator(app), handshaker)
 	proxyApp.SetLogger(logger.With("module", "proxy"))
 	if err := proxyApp.Start(); err != nil {
@@ -67,7 +68,7 @@ func WALWithNBlocks(numBlocks int) (data []byte, err error) {
 	defer eventBus.Stop()
 	mempool := types.MockMempool{}
 	evpool := types.MockEvidencePool{}
-	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
+	blockExec := sm.NewBlockExecutor(stateDB, stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool)
 	consensusState.SetLogger(logger)
 	consensusState.SetEventBus(eventBus)

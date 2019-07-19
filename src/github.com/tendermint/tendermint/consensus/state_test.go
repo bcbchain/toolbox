@@ -68,8 +68,8 @@ func TestStateProposerSelection0(t *testing.T) {
 	<-newRoundCh
 
 	// lets commit a block and ensure proposer for the next height is correct
-	prop := cs1.GetRoundState().Validators.GetProposer()
-	if !bytes.Equal(prop.Address, cs1.privValidator.GetAddress()) {
+	prop := cs1.GetRoundState().Validators.GetProposer(nil, nil)
+	if prop.Address != cs1.privValidator.GetAddress() {
 		t.Fatalf("expected proposer to be validator %d. Got %X", 0, prop.Address)
 	}
 
@@ -82,8 +82,8 @@ func TestStateProposerSelection0(t *testing.T) {
 	// wait for new round so next validator is set
 	<-newRoundCh
 
-	prop = cs1.GetRoundState().Validators.GetProposer()
-	if !bytes.Equal(prop.Address, vss[1].GetAddress()) {
+	prop = cs1.GetRoundState().Validators.GetProposer(nil, nil)
+	if prop.Address != vss[1].GetAddress() {
 		panic(cmn.Fmt("expected proposer to be validator %d. Got %X", 1, prop.Address))
 	}
 }
@@ -103,8 +103,8 @@ func TestStateProposerSelection2(t *testing.T) {
 
 	// everyone just votes nil. we get a new proposer each round
 	for i := 0; i < len(vss); i++ {
-		prop := cs1.GetRoundState().Validators.GetProposer()
-		if !bytes.Equal(prop.Address, vss[(i+2)%len(vss)].GetAddress()) {
+		prop := cs1.GetRoundState().Validators.GetProposer(nil, nil)
+		if prop.Address != vss[(i+2)%len(vss)].GetAddress() {
 			panic(cmn.Fmt("expected proposer to be validator %d. Got %X", (i+2)%len(vss), prop.Address))
 		}
 
@@ -196,12 +196,12 @@ func TestStateBadProposal(t *testing.T) {
 	incrementRound(vss[1:]...)
 
 	// make the block bad by tampering with statehash
-	stateHash := propBlock.AppHash
+	stateHash := propBlock.LastAppHash
 	if len(stateHash) == 0 {
 		stateHash = make([]byte, 32)
 	}
 	stateHash[0] = byte((stateHash[0] + 1) % 255)
-	propBlock.AppHash = stateHash
+	propBlock.LastAppHash = stateHash
 	propBlockParts := propBlock.MakePartSet(partSize)
 	proposal := types.NewProposal(vs2.Height, round, propBlockParts.Header(), -1, types.BlockID{})
 	if err := vs2.SignProposal(config.ChainID(), proposal); err != nil {

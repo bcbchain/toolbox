@@ -51,6 +51,7 @@ type Function struct {
 type ImportContract struct {
 	Name       string
 	Interfaces []Method
+	Pos        token.Pos
 }
 
 // Result is the parse result
@@ -74,7 +75,11 @@ type Result struct {
 	IsExistInitChain   bool
 	UpdateChain        Function
 	IsExistUpdateChain bool
+	Mine               Function
+	IsExistMine        bool
 	Functions          []Function
+	MFunctions         []Function
+	IFunctions         []Function
 
 	Receipts        []Method
 	ImportContracts []ImportContract
@@ -96,7 +101,9 @@ func newVisitor() visitor {
 	errDesc := make([]string, 0)
 	errPos := make([]token.Pos, 0)
 	funcs := make([]Function, 0)
-	receipts := make([]Method, 0)
+	mFuncs := make([]Function, 0)
+	iFuncs := make([]Function, 0)
+	//receipts := make([]Method, 0)
 	importContracts := make([]ImportContract, 0)
 	stores := make([]Field, 0)
 	caches := make([]Field, 0)
@@ -104,10 +111,12 @@ func newVisitor() visitor {
 	aImp := make(map[Import]struct{})
 	us := make(map[string]ast.GenDecl)
 	res := Result{
-		Imports:         imp,
-		AllImports:      aImp,
-		Functions:       funcs,
-		Receipts:        receipts,
+		Imports:    imp,
+		AllImports: aImp,
+		Functions:  funcs,
+		MFunctions: mFuncs,
+		IFunctions: iFuncs,
+		//Receipts:        receipts,
 		ImportContracts: importContracts,
 		Stores:          stores,
 		StoreCaches:     caches,
@@ -180,6 +189,7 @@ func getFieldImports(t ast.Expr, imports map[Import]struct{}, filtered map[Impor
 		}
 	}
 
+CONTINUE:
 	if sel, okSel := t.(*ast.SelectorExpr); okSel {
 		doSel(sel)
 	} else if star, okStar := t.(*ast.StarExpr); okStar {
@@ -189,6 +199,9 @@ func getFieldImports(t ast.Expr, imports map[Import]struct{}, filtered map[Impor
 	} else if arr, okArr := t.(*ast.ArrayType); okArr {
 		if sel, okSel := arr.Elt.(*ast.SelectorExpr); okSel {
 			doSel(sel)
+		} else if arr, okArr := arr.Elt.(*ast.ArrayType); okArr {
+			t = arr
+			goto CONTINUE
 		}
 	} else if mt, okM := t.(*ast.MapType); okM {
 		if sel, okSel := mt.Key.(*ast.SelectorExpr); okSel {
@@ -196,6 +209,9 @@ func getFieldImports(t ast.Expr, imports map[Import]struct{}, filtered map[Impor
 		}
 		if vt, okV := mt.Value.(*ast.SelectorExpr); okV {
 			doSel(vt)
+		} else if vt, okV := mt.Value.(*ast.MapType); okV {
+			t = vt
+			goto CONTINUE
 		} else if vs, okVS := mt.Value.(*ast.StarExpr); okVS {
 			if sel, okSel := vs.X.(*ast.SelectorExpr); okSel {
 				doSel(sel)
@@ -203,6 +219,9 @@ func getFieldImports(t ast.Expr, imports map[Import]struct{}, filtered map[Impor
 		} else if ar, okA := mt.Value.(*ast.ArrayType); okA {
 			if sel, okS := ar.Elt.(*ast.SelectorExpr); okS {
 				doSel(sel)
+			} else if arr, okArr := ar.Elt.(*ast.ArrayType); okArr {
+				t = arr
+				goto CONTINUE
 			}
 		}
 	}
@@ -214,46 +233,107 @@ func (v *visitor) parseStoreField(d *ast.Field) {
 		for _, doc := range list {
 			doc = strings.TrimSpace(doc)
 			if doc == "@:public:store:cache" {
-				// fmt.Println("FIELD::: name(", d.Names, ") =>[[", d.Doc.Text(), "]]")
 				cacheField := v.parseField(d)
-				if IsStarValueInType(cacheField) {
-					v.reportErr("the symbol of cache not support star type", d.Type.Pos())
+
+				if e, ok := d.Type.(*ast.MapType); ok {
+					if e, ok := e.Value.(*ast.MapType); ok {
+						if _, ok := e.Value.(*ast.MapType); ok {
+							v.reportErr("contract cannot support more than two level map", d.Pos())
+						}
+					}
 				}
 
 				v.res.StoreCaches = append(v.res.StoreCaches, cacheField)
 			} else if doc == "@:public:store" {
-				// fmt.Println("FIELD::: name(", d.Names, ") =>[[", d.Doc.Text(), "]]")
 				storeField := v.parseField(d)
+
+				if e, ok := d.Type.(*ast.MapType); ok {
+					if e, ok := e.Value.(*ast.MapType); ok {
+						if _, ok := e.Value.(*ast.MapType); ok {
+							v.reportErr("contract cannot support more than two level map", d.Pos())
+						}
+					}
+				}
+
 				v.res.Stores = append(v.res.Stores, storeField)
+			}
+		}
+
+		v.initVariableCallee()
+	}
+}
+
+func (v *visitor) initVariableCallee() {
+	for _, s := range v.res.Stores {
+		variableCallee[s.Names[0]] = struct{}{}
+	}
+
+	for _, sc := range v.res.StoreCaches {
+		variableCallee[sc.Names[0]] = struct{}{}
+	}
+}
+
+func (v *visitor) parseAllFunc(d *ast.FuncDecl) {
+
+	f := v.parseFunction(d)
+	if d.Doc != nil {
+		// fmt.Println("FUNCTION::: name(", d.Name.Name, ") =>[[", d.Doc.Text(), "]]")
+		if v.hasConstructorInComments(d) {
+			if d.Name.Name == "InitChain" {
+				if v.res.IsExistInitChain == true {
+					v.reportErr("the InitChain function must be only one", d.Type.Pos())
+				}
+				v.res.InitChain = v.parseInitChain(f, d)
+				v.res.IsExistInitChain = true
+			} else if d.Name.Name == "UpdateChain" {
+				if v.res.IsExistUpdateChain == true {
+					v.reportErr("the UpdateChain function must be only one", d.Type.Pos())
+				}
+				v.res.UpdateChain = v.parseUpdateChain(f, d)
+				v.res.IsExistUpdateChain = true
+			}
+		} else if v.hasMineInComments(d) {
+			if d.Name.Name == "Mine" &&
+				d.Type.Results != nil &&
+				len(d.Type.Results.List) == 1 &&
+				d.Type.Results.List[0].Type.(*ast.Ident).Name == "int64" {
+				//if d.Name.Name == "Mine" {
+				if v.res.IsExistMine == true {
+					v.reportErr("the Mine function must be only one", d.Type.Pos())
+				}
+				v.res.Mine = v.parseMine(f, d)
+				v.res.IsExistMine = true
+			}
+		}
+		mGas, mB := v.getGasFromComments(d, methodGasPrefix)
+		iGas, iB := v.getGasFromComments(d, interfaceGasPrefix)
+		if iGas < 0 {
+			v.reportErr("interface gas must greater than zero", d.Pos())
+		}
+
+		if mB || iB {
+			f.MGas = mGas
+			f.IGas = iGas
+
+			if HaveUserDefinedStruct(f.Method) {
+				v.reportErr("The method params/results type cannot use struct", f.pos)
+			}
+
+			v.res.Functions = append(v.res.Functions, f)
+			if mB {
+				v.res.MFunctions = append(v.res.MFunctions, f)
+			}
+			if iB {
+				v.res.IFunctions = append(v.res.IFunctions, f)
 			}
 		}
 	}
 }
 
-func (v *visitor) parseAllFunc(d *ast.FuncDecl) {
-	if d.Doc != nil {
-		// fmt.Println("FUNCTION::: name(", d.Name.Name, ") =>[[", d.Doc.Text(), "]]")
-		if v.hasConstructorInComments(d) && d.Name.Name == "InitChain" {
-			v.res.InitChain = v.parseInitChain(d)
-			v.res.IsExistInitChain = true
-		} else if v.hasConstructorInComments(d) && d.Name.Name == "UpdateChain" {
-			v.res.UpdateChain = v.parseUpdateChain(d)
-			v.res.IsExistUpdateChain = true
-		}
-		mGas := v.getGasFromComments(d, methodGasPrefix)
-		iGas := v.getGasFromComments(d, interfaceGasPrefix)
-		if mGas+iGas > 0 {
-			f := v.parseFunction(d)
-			f.MGas = mGas
-			f.IGas = iGas
-			// fmt.Println(f)
-			v.res.Functions = append(v.res.Functions, f)
-		}
-	}
-}
-
 func (v *visitor) parseFunction(d *ast.FuncDecl) Function {
+	// check
 	f := Function{}
+
 	if d.Recv != nil {
 		f.Receiver = v.parseField(d.Recv.List[0])
 	}
@@ -274,31 +354,67 @@ func (v *visitor) parseFunction(d *ast.FuncDecl) Function {
 	return f
 }
 
-func (v *visitor) parseInitChain(d *ast.FuncDecl) Function {
-	f := Function{}
+func (v *visitor) parseInitChain(f Function, d *ast.FuncDecl) Function {
 
 	if len(d.Type.Params.List) > 0 {
-		v.reportErr("InitChain must have no params", d.Type.Params.Pos())
+		v.reportErr("InitChain must have no params", d.Pos())
 	}
-	if len(d.Recv.List) != 1 {
-		v.reportErr("InitChain has wrong receiver", d.Recv.Pos())
+	if d.Type.Results != nil && len(d.Type.Results.List) > 0 {
+		v.reportErr("InitChain must have no results", d.Pos())
 	}
-	f.Receiver = v.parseField(d.Recv.List[0])
+	if d.Recv == nil || len(d.Recv.List) != 1 {
+		v.reportErr("InitChain has wrong receiver", d.Pos())
+	}
+	if d.Recv != nil {
+		f.Receiver = v.parseField(d.Recv.List[0])
+		if f.Receiver.FieldType.(*ast.StarExpr).X.(*ast.Ident).Name != v.res.ContractStructure {
+			v.reportErr("InitChain has wrong receiver", d.Pos())
+		}
+	}
 	f.pos = d.Pos()
 
 	return f
 }
 
-func (v *visitor) parseUpdateChain(d *ast.FuncDecl) Function {
-	f := Function{}
+func (v *visitor) parseUpdateChain(f Function, d *ast.FuncDecl) Function {
 
 	if len(d.Type.Params.List) > 0 {
-		v.reportErr("UpdateChain must have no params", d.Type.Params.Pos())
+		v.reportErr("UpdateChain must have no params", d.Pos())
 	}
-	if len(d.Recv.List) != 1 {
-		v.reportErr("UpdateChain has wrong receiver", d.Recv.Pos())
+	if d.Type.Results != nil && len(d.Type.Results.List) > 0 {
+		v.reportErr("UpdateChain must have no results", d.Pos())
 	}
-	f.Receiver = v.parseField(d.Recv.List[0])
+	if d.Recv == nil || len(d.Recv.List) != 1 {
+		v.reportErr("UpdateChain has wrong receiver", d.Pos())
+	}
+	if d.Recv != nil {
+		f.Receiver = v.parseField(d.Recv.List[0])
+		if f.Receiver.FieldType.(*ast.StarExpr).X.(*ast.Ident).Name != v.res.ContractStructure {
+			v.reportErr("UpdateChain has wrong receiver", d.Pos())
+		}
+	}
+	f.pos = d.Pos()
+
+	return f
+}
+
+func (v *visitor) parseMine(f Function, d *ast.FuncDecl) Function {
+
+	if len(d.Type.Params.List) > 0 {
+		v.reportErr("Mine must have no params", d.Pos())
+	}
+	if len(d.Type.Results.List) != 1 {
+		v.reportErr("Mine must have one result", d.Pos())
+	}
+	if d.Recv == nil || len(d.Recv.List) != 1 {
+		v.reportErr("Mine has wrong receiver", d.Pos())
+	}
+	if d.Recv != nil {
+		f.Receiver = v.parseField(d.Recv.List[0])
+		if f.Receiver.FieldType.(*ast.StarExpr).X.(*ast.Ident).Name != v.res.ContractStructure {
+			v.reportErr("Mine has wrong receiver", d.Pos())
+		}
+	}
 	f.pos = d.Pos()
 
 	return f
@@ -315,26 +431,59 @@ func (v *visitor) hasConstructorInComments(d *ast.FuncDecl) bool {
 	return false
 }
 
-func (v *visitor) getGasFromComments(d *ast.FuncDecl, prefix string) int64 {
+func (v *visitor) hasMineInComments(d *ast.FuncDecl) bool {
+	l := strings.Split(d.Doc.Text(), "\n")
+	for _, c := range l {
+		c = strings.TrimSpace(c)
+		if strings.HasPrefix(c, "@:public:mine") {
+			return true
+		}
+	}
+	return false
+}
+
+func (v *visitor) getGasFromComments(d *ast.FuncDecl, prefix string) (int64, bool) {
 	l := strings.Split(d.Doc.Text(), "\n")
 	for _, c := range l {
 		c = strings.TrimSpace(c)
 		if strings.HasPrefix(c, prefix) {
-			gas := c[len(prefix) : len(c)-1]
-			i, e := strconv.ParseInt(gas, 10, 0)
-			if e != nil {
-				v.reportErr("method gas not a number", d.Pos())
+			if !d.Name.IsExported() {
+				v.reportErr("func name invalid", d.Pos())
+				return 0, false
 			}
-			return i
+
+			if d.Recv == nil {
+				v.reportErr("receiver required", d.Pos())
+				return 0, false
+			}
+
+			if len(d.Recv.List) != 1 {
+				v.reportErr("no receiver", d.Pos())
+				return 0, false
+			}
+			if v.res.ContractStructure != d.Recv.List[0].Type.(*ast.StarExpr).X.(*ast.Ident).String() {
+				v.reportErr("receiver incorrect", d.Pos())
+				return 0, false
+			}
+			gas := c[len(prefix) : len(c)-1]
+			i, e := strconv.ParseInt(gas, 10, 64)
+			if e != nil {
+				v.reportErr("method and interface gas must be a number", d.Pos())
+			}
+			return i, true
 		}
 	}
-	return 0
+	return 0, false
 }
 
 // Id @ level 1 is package name
 func (v *visitor) parsePackageName(d *ast.Ident) {
 	if v.depth == 1 {
-		v.res.PackageName = d.Name
+		if d.Name == "std" {
+			v.reportErr("Contract package name cannot use std", d.Pos())
+		} else {
+			v.res.PackageName = d.Name
+		}
 	}
 }
 
@@ -385,6 +534,8 @@ func (v *visitor) parseVar(d *ast.GenDecl) {
 				}
 				if v.depth <= 1 {
 					v.reportErr("GLOBAL VAR:"+name.Name, d.Pos())
+				} else if strings.HasPrefix(name.Obj.Name, "float") {
+					v.reportErr("FLOAT VAR:"+name.Name, d.Pos())
 				}
 			}
 		}
@@ -411,6 +562,9 @@ func (v *visitor) parseStructsNInterface(d *ast.GenDecl) {
 func (v *visitor) parseInterface(d *ast.GenDecl, typ *ast.TypeSpec) {
 	// fmt.Println("INTERFACE::: name(", typ.Name, ") =>[[", d.Doc.Text(), "]]")
 	if v.isReceipt(d) {
+		if v.res.Receipts == nil {
+			v.res.Receipts = make([]Method, 0)
+		}
 		it, _ := typ.Type.(*ast.InterfaceType)
 		for _, am := range it.Methods.List {
 			if am.Names[0].Name[:4] != "emit" {
@@ -452,7 +606,13 @@ func (v *visitor) parseImportInterface(d *ast.GenDecl, typ *ast.TypeSpec) {
 	// fmt.Println("INTERFACE::: name(", typ.Name, ") =>[[", d.Doc.Text(), "]]")
 	isImport, importContract := v.isImport(d)
 	if isImport {
-		imCon := ImportContract{Name: importContract, Interfaces: make([]Method, 0)}
+		if v.isExist(importContract) {
+			v.reportErr("import contract must unique", d.Pos())
+		}
+		if importContract == typ.Name.Name {
+			v.reportErr("import flag name cannot same to type name", typ.Pos())
+		}
+		imCon := ImportContract{Name: importContract, Interfaces: make([]Method, 0), Pos: d.Pos()}
 		it, _ := typ.Type.(*ast.InterfaceType)
 		for _, am := range it.Methods.List {
 			if m, ok := am.Type.(*ast.FuncType); ok {
@@ -471,10 +631,24 @@ func (v *visitor) parseImportInterface(d *ast.GenDecl, typ *ast.TypeSpec) {
 					Params:  params,
 					Results: results,
 				})
+
+				if HaveUserDefinedStruct(imCon.Interfaces[len(imCon.Interfaces)-1]) {
+					v.reportErr("The method params/results type cannot use struct", d.Pos())
+				}
 			}
 		}
 		v.res.ImportContracts = append(v.res.ImportContracts, imCon)
 	}
+}
+
+func (v *visitor) isExist(name string) bool {
+	for _, ic := range v.res.ImportContracts {
+		if ic.Name == name {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (v *visitor) isImport(d *ast.GenDecl) (isImport bool, contractName string) {
@@ -494,6 +668,7 @@ func (v *visitor) parseStructs(d *ast.GenDecl, typ *ast.TypeSpec) {
 	if v.depth == 1 {
 		v.res.UserStruct[typ.Name.Name] = *d
 	}
+
 	docs := strings.Split(d.Doc.Text(), "\n")
 	for _, comment := range docs {
 		comment = strings.TrimSpace(comment)
@@ -502,7 +677,7 @@ func (v *visitor) parseStructs(d *ast.GenDecl, typ *ast.TypeSpec) {
 				v.reportErr("ContractName is already set", d.Pos())
 			}
 			v.res.ContractName = strings.TrimSpace(comment[11:])
-			if !v.checkRegex(v.res.ContractName, contractNameExpr) {
+			if !checkRegex(v.res.ContractName, contractNameExpr) {
 				v.reportErr("ContractName -> invalid format:"+v.res.ContractName, d.Pos())
 			}
 			v.inClass = true
@@ -511,20 +686,30 @@ func (v *visitor) parseStructs(d *ast.GenDecl, typ *ast.TypeSpec) {
 			//}
 		}
 		if len(comment) > 10 && comment[:10] == "@:version:" {
+			if v.res.Version != "" {
+				v.reportErr("Must only one \"@:version:\" comment", d.Pos())
+			}
 			v.res.Version = strings.TrimSpace(comment[10:])
-			if !v.checkRegex(v.res.Version, versionExpr) {
+			if !checkRegex(v.res.Version, versionExpr) {
 				v.reportErr("contract Version -> invalid format:"+v.res.Version, d.Pos())
 			}
 		}
 		if len(comment) > 15 && comment[:15] == "@:organization:" {
+			if v.res.OrgID != "" {
+				v.reportErr("Must only one \"@:organization:\": comment", d.Pos())
+			}
 			v.res.OrgID = strings.TrimSpace(comment[15:])
-			if !v.checkRegex(v.res.OrgID, organizationExpr) {
-				v.reportErr("Organization -> invalid format:"+v.res.OrgID, d.Pos())
+			err := CheckOrgID(v.res.OrgID)
+			if err != nil {
+				v.reportErr("Organization -> invalid format:"+err.Error(), d.Pos())
 			}
 		}
 		if len(comment) > 9 && comment[:9] == "@:author:" {
+			if v.res.Author != "" {
+				v.reportErr("Must only one \"@:author:\": comment", d.Pos())
+			}
 			v.res.Author = strings.TrimSpace(comment[9:])
-			if !v.checkRegex(v.res.Author, authorExpr) {
+			if !checkRegex(v.res.Author, authorExpr) {
 				v.reportErr("Author -> invalid format:"+v.res.Author, d.Pos())
 			}
 		}
@@ -534,7 +719,7 @@ func (v *visitor) parseStructs(d *ast.GenDecl, typ *ast.TypeSpec) {
 			v.reportErr("You have more ContractStructure:"+v.res.ContractStructure+","+typ.Name.Name, d.Pos())
 		}
 		v.res.ContractStructure = typ.Name.Name
-		if !v.checkRegex(v.res.ContractStructure, contractClassExpr) {
+		if !checkRegex(v.res.ContractStructure, contractClassExpr) {
 			v.reportErr("ContractStructure -> invalid format:"+v.res.ContractStructure, d.Pos())
 		}
 		if !v.checkSDKDeclare(typ) {
@@ -554,7 +739,7 @@ func (v *visitor) printContractInfo() {
 		//fmt.Println("PackageName:", v.res.PackageName)
 		//fmt.Println("ContractName:", v.res.ContractName)
 		//fmt.Println("ContractStructure:", v.res.ContractStructure)
-		if len(v.res.InitChain.Receiver.Names) != 1 {
+		if v.res.IsExistInitChain && len(v.res.InitChain.Receiver.Names) != 1 {
 			v.reportErr("InitChain has no receiver", v.res.InitChain.pos)
 		} else {
 			//fmt.Println("InitChain's Receiver:", v.res.InitChain.Receiver.Names[0])
@@ -572,7 +757,7 @@ func (v *visitor) printContractInfo() {
 }
 
 // all declare must obey our naming specification
-func (v *visitor) checkRegex(obj string, regex string) bool {
+func checkRegex(obj string, regex string) bool {
 	r, e := regexp.Compile(regex)
 	if e != nil {
 		return false

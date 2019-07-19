@@ -4,6 +4,7 @@ import (
 	"blockchain/smccheck/parsecode"
 	"bytes"
 	"path/filepath"
+	"strings"
 	"text/template"
 )
 
@@ -32,17 +33,17 @@ type baseExport struct {
 func res2Base(res *parsecode.Result) baseExport {
 	base := baseExport{}
 	base.PackageName = res.PackageName
-	base.ReceiverName = res.InitChain.Receiver.Names[0]
+	base.ReceiverName = strings.ToLower(string([]rune(res.ContractStructure)[0]))
 	base.ContractName = res.ContractStructure
 	return base
 }
 
-func GenSDK(inPath string, res *parsecode.Result) error {
+func GenSDK(inPath string, res *parsecode.Result) {
 	filename := filepath.Join(inPath, res.PackageName+"_autogen_sdk.go")
 
 	tmpl, err := template.New("base").Parse(sdkTemplate)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	base := res2Base(res)
@@ -50,11 +51,10 @@ func GenSDK(inPath string, res *parsecode.Result) error {
 	var buf bytes.Buffer
 
 	if err = tmpl.Execute(&buf, base); err != nil {
-		return err
+		panic(err)
 	}
 
 	if err := parsecode.FmtAndWrite(filename, buf.String()); err != nil {
-		return err
+		panic(err)
 	}
-	return nil
 }

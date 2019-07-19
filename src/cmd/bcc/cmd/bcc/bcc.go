@@ -4,9 +4,12 @@ import (
 	"blockchain/smcsdk/sdk/std"
 	"blockchain/types"
 	"bytes"
+	"cmd/bcc/common"
 	"cmd/bcc/core"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -51,23 +54,38 @@ func blockHeight(chainID string) error {
 	return nil
 }
 
-func block(chainID, height string) error {
+func block(height, bTime, num, chainID string) (err error) {
+	if height != "" && bTime != "" {
+		fmt.Println("height and time cannot be assigned together")
+		return nil
+	}
 
 	// if height is empty, then set it current height
-	if height == "" {
+	if height == "" && bTime == "" {
 		blkResult, err := core.BlockHeight(chainID)
 		if err != nil {
 			return err
 		}
-
 		height = fmt.Sprintf("%d", blkResult.LastBlock)
 	}
-	iHeight, err := strconv.ParseInt(height, 10, 64)
-	if err != nil {
-		return err
+	var iHeight, iNum *int64
+	if height != "" {
+		iHeight = new(int64)
+		*iHeight, err = strconv.ParseInt(height, 10, 64)
+		if err != nil {
+			return
+		}
 	}
 
-	blk, err := core.Block(iHeight, chainID)
+	if num != "" {
+		iNum = new(int64)
+		*iNum, err = strconv.ParseInt(num, 10, 64)
+		if err != nil {
+			return err
+		}
+	}
+
+	blk, err := core.Block(iHeight, bTime, iNum, chainID)
 	if err != nil {
 		Error(fmt.Sprintf("Query Block \"%v\" information failed, %v", height, err.Error()))
 		return err
@@ -134,18 +152,96 @@ func nonce(accAddress types.Address, name, password, chainID, keyStorePath strin
 	return nil
 }
 
-func commitTx(chainID, tx string) error {
+func commitTx(tx, file, chainID string) error {
 
-	result, err := core.CommitTx(chainID, tx)
-	if err != nil {
-		Error(fmt.Sprintf("Commit transaction \"%v\" information failed, %v", tx, err.Error()))
-		return err
+	if tx == "" && file == "" {
+		fmt.Println("tx or file cannot be empty")
+		return nil
+	}
+
+	txs := make([]string, 0)
+	var err error
+
+	if file != "" {
+		txs, err = checkFileForCommitTx(file, chainID)
+		if err != nil {
+			return err
+		}
+	}
+
+	if tx != "" {
+		err = checkTxData(tx, chainID)
+		if err != nil {
+			return err
+		}
+		txs = append(txs, tx)
 	}
 
 	fmt.Println("OK")
-	jsIndent, _ := json.MarshalIndent(&result, "", "  ")
-	fmt.Printf("Response: %s\n", string(jsIndent))
+	fmt.Printf("Response: \n")
+	for _, tx := range txs {
+		result, err := core.CommitTx(chainID, tx)
+		if err != nil {
+			Error(fmt.Sprintf("Commit transaction \"%v\" information failed, %v", tx, err.Error()))
+			return err
+		}
+		jsIndent, _ := json.MarshalIndent(&result, "", "  ")
+		fmt.Println(string(jsIndent))
+	}
 
+	return nil
+}
+
+func checkFileForCommitTx(file, chainID string) (txs []string, err error) {
+
+	con, err := ioutil.ReadFile(file)
+	if err != nil {
+		return
+	}
+
+	if len(con) == 0 {
+		return nil, errors.New("file cannot be empty")
+	}
+
+	conStr := strings.Trim(string(con), "\r\n")
+	conStr = strings.Trim(conStr, "\n")
+
+	lines := strings.Split(string(conStr), "\r\n")
+	if len(lines) <= 1 {
+		lines = strings.Split(string(conStr), "\n")
+	}
+
+	for index, v := range lines {
+		err := checkTxData(v, chainID)
+		if err != nil {
+			return nil, errors.New(fmt.Sprintf("%d %v", index+1, err))
+		}
+		txs = append(txs, strings.TrimSpace(v))
+	}
+
+	return
+}
+
+func checkTxData(tx, chainID string) error {
+
+	if chainID == "" {
+		chainID = common.GetBCCConfig().DefaultChainID
+	}
+
+	MAC := chainID + "<tx>"
+	strSplit := strings.Split(tx, ".")
+
+	if len(strSplit) != 5 {
+		return errors.New("tx string seg number must be 5 that split by dot")
+	}
+
+	if strSplit[0] != MAC {
+		return errors.New("tx string must prefix with " + MAC)
+	}
+
+	if strSplit[1] != "v1" && strSplit[1] != "v2" {
+		return errors.New(`tx string version wrong, must be "v1" or "v2"`)
+	}
 	return nil
 }
 
@@ -471,7 +567,7 @@ func ParamsExample(contract *std.Contract) (err error) {
 			example2 = strings.Join(example, "@")
 		}
 
-		fmt.Printf("    %s\n    Params： %s\n\n", v.ProtoType, example2)
+		fmt.Printf("    %s\n    methodId: %s\n    Params: %s\n\n", v.ProtoType, v.MethodID, example2)
 	}
 
 	fmt.Println("PS: If the string is just a string, Example: \"example\"\n " +
@@ -479,7 +575,6 @@ func ParamsExample(contract *std.Contract) (err error) {
 
 	return
 }
-
 func checkType(Type interface{}) string {
 
 	switch Type {
@@ -514,4 +609,25 @@ func checkType(Type interface{}) string {
 	default:
 		return ""
 	}
+}
+
+//
+func query(key, chainID string) error {
+	if key == "" {
+		fmt.Println("key cannot be empty")
+		return nil
+	}
+
+	result, err := core.QueryOfRpc(key, chainID)
+	if err != nil {
+		Error(err.Error())
+	}
+
+	fmt.Println("OK")
+	fmt.Printf("Response: \n")
+	fmt.Printf("  Code: %v\n", result.Response.Code)
+	fmt.Printf("  Key: %s\n", string(result.Response.Key))
+	fmt.Printf("  Value: %s\n", string(result.Response.Value))
+
+	return nil
 }

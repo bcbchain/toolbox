@@ -64,12 +64,12 @@ func (t *TestMessage) testContract() {
 			c.ContractInterface,
 			c.ContractToken)
 
-		m := object.NewMessage(t.sdk, contract, "123123", nil, t.sdk.Message().Sender().Address(), nil, nil)
+		m := object.NewMessage(t.sdk, contract, "123123", nil, t.sdk.Message().Sender().Address(), t.sdk.Message().Payer().Address(), nil, nil)
 		smc := t.sdk.(*sdkimpl.SmartContract)
 		smc.SetMessage(m)
 
 		printTestCase(i, c.desc)
-		Assert(t.sdk.Message().Contract().Owner() == c.ContractOwnerAddr)
+		Assert(t.sdk.Message().Contract().Owner().Address() == c.ContractOwnerAddr)
 		Assert(t.sdk.Message().Contract().Name() == c.ContractName)
 		Assert(t.sdk.Message().Contract().Version() == c.ContractVersion)
 		Assert(t.sdk.Message().Contract().KeyPrefix() == c.ContractPrefix)
@@ -106,7 +106,8 @@ func (t *TestMessage) testMethodID() {
 	for i, c := range cases {
 		printTestCase(i, c.desc)
 
-		m := object.NewMessage(t.sdk, t.sdk.Message().Contract(), c.MethodID, t.sdk.Message().Items(), t.sdk.Message().Sender().Address(), t.sdk.Message().Origins(), t.sdk.Message().InputReceipts())
+		m := object.NewMessage(t.sdk, t.sdk.Message().Contract(), c.MethodID, t.sdk.Message().Items(),
+			t.sdk.Message().Sender().Address(), t.sdk.Message().Payer().Address(), t.sdk.Message().Origins(), t.sdk.Message().InputReceipts())
 		smc := t.sdk.(*sdkimpl.SmartContract)
 		smc.SetMessage(m)
 		Assert(t.sdk.Message().MethodID() == c.MethodID)
@@ -128,7 +129,8 @@ func (t *TestMessage) testItems() {
 	for i, c := range cases {
 		printTestCase(i, c.desc)
 
-		m := object.NewMessage(t.sdk, t.sdk.Message().Contract(), t.sdk.Message().MethodID(), c.Items, t.sdk.Message().Sender().Address(), t.sdk.Message().Origins(), t.sdk.Message().InputReceipts())
+		m := object.NewMessage(t.sdk, t.sdk.Message().Contract(), t.sdk.Message().MethodID(), c.Items,
+			t.sdk.Message().Sender().Address(), t.sdk.Message().Payer().Address(), t.sdk.Message().Origins(), t.sdk.Message().InputReceipts())
 		smc := t.sdk.(*sdkimpl.SmartContract)
 		smc.SetMessage(m)
 		//Assert(t.sdk.Message().Items == c.Items)
@@ -172,7 +174,8 @@ func (t *TestMessage) testSender() {
 	for i, c := range cases {
 		printTestCase(i, c.desc)
 
-		m := object.NewMessage(t.sdk, t.sdk.Message().Contract(), t.sdk.Message().MethodID(), t.sdk.Message().Items(), c.Sender, t.sdk.Message().Origins(), t.sdk.Message().InputReceipts())
+		m := object.NewMessage(t.sdk, t.sdk.Message().Contract(), t.sdk.Message().MethodID(), t.sdk.Message().Items(),
+			c.Sender, t.sdk.Message().Payer().Address(), t.sdk.Message().Origins(), t.sdk.Message().InputReceipts())
 		smc := t.sdk.(*sdkimpl.SmartContract)
 		smc.SetMessage(m)
 		Assert(t.sdk.Message().Sender().Address() == c.Sender)

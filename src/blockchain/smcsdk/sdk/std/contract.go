@@ -55,6 +55,7 @@ type Contract struct {
 	KeyPrefix    string        `json:"keyPrefix"`    //合约在状态数据库中KEY值的前缀
 	Methods      []Method      `json:"methods"`      //合约对外提供接口的方法列表
 	Interfaces   []Method      `json:"interfaces"`   //合约提供的跨合约调用的方法列表
+	Mine         []Method      `json:"mine"`         //合约提供的挖矿方法
 	Token        types.Address `json:"token"`        //合约代币地址
 	OrgID        string        `json:"orgID"`        //组织ID
 	ChainVersion int64         `json:"chainVersion"` //链版本
@@ -66,6 +67,7 @@ type BuildResult struct {
 	Error       string   `json:"error"`
 	Methods     []Method `json:"methods"`
 	Interfaces  []Method `json:"interfaces"`
+	Mine        []Method `json:"mine"`
 	OrgCodeHash []byte   `json:"orgCodeHash"`
 }
 
@@ -76,6 +78,7 @@ type GenResult struct {
 	OrgID        string   `json:"orgID"`
 	Methods      []Method `json:"methods"`
 	Interfaces   []Method `json:"interfaces"`
+	Mine         []Method `json:"mine"`
 }
 
 // ContractMeta contract's meta information
@@ -97,6 +100,15 @@ type ContractWithEffectHeight struct {
 	ContractAddr types.Address `json:"contractAddr"`
 	IsUpgrade    bool          `json:"isUpgrade"`
 }
+
+// MineContract contract address and height of mine
+type MineContract struct {
+	MineHeight int64         `json:"mineHeight"` // 开发挖矿高度
+	Address    types.Address `json:"address"`    // 合约地址
+}
+
+// KeyOfMineContracts key of all MineContract list
+func KeyOfMineContracts() string { return "/contract/mines" }
 
 // KeyOfContractWithEffectHeight the access key for effective contract with height
 // data for this key refer ContractWithEffectHeight
@@ -126,12 +138,9 @@ func KeyOfGenesisContractAddrList() string { return "/genesis/contracts" }
 
 // GetGenesisContractAddr get genesis contract addr
 func GetGenesisContractAddr(chainID string) string {
-	if chainID != "" {
-		crypto.SetChainId(chainID)
-	}
 	pubKey := [32]byte{}
 	p := crypto.PubKeyEd25519FromBytes(pubKey[:])
-	addr := p.Address()
+	addr := p.Address(chainID)
 	return addr
 }
 

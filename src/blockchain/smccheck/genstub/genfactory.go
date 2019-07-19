@@ -13,6 +13,7 @@ const factoryTemplate = `package {{$.PackageName}}
 
 import (
 	"blockchain/smcsdk/sdk"
+	sdktypes "blockchain/smcsdk/sdk/types"
 	"blockchain/smcsdk/sdkimpl/helper"
 	"contract/stubcommon/types"
 
@@ -27,7 +28,7 @@ func NewInterfaceStub(smc sdk.ISmartContract, contractName string) types.IContra
 	ch := helper.ContractHelper{}
 	ch.SetSMC(smc)
 	contract := ch.ContractOfName(contractName)
-
+	sdk.Require(contract != nil, sdktypes.ErrExpireContract, "")
 	switch contract.Version() {
 	{{- range $i1,$v1 := $.Versions}}
 	case "{{v $v1}}":
@@ -39,9 +40,9 @@ func NewInterfaceStub(smc sdk.ISmartContract, contractName string) types.IContra
 `
 
 // GenStubFactory - generate the interface stub factory go source
-func GenStFactory(res *parsecode.Result, outDir string) error {
+func GenStFactory(res *parsecode.Result, outDir string) {
 	if err := os.MkdirAll(outDir, os.FileMode(0750)); err != nil {
-		return err
+		panic(err)
 	}
 	filename := filepath.Join(outDir, "interfacestubfactory.go")
 
@@ -56,7 +57,7 @@ func GenStFactory(res *parsecode.Result, outDir string) error {
 
 	tmpl, err := template.New("interfaceStubFactory").Funcs(funcMap).Parse(factoryTemplate)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	obj := Res2stub(res)
@@ -64,11 +65,10 @@ func GenStFactory(res *parsecode.Result, outDir string) error {
 	var buf bytes.Buffer
 
 	if err = tmpl.Execute(&buf, obj); err != nil {
-		return err
+		panic(err)
 	}
 
 	if err := parsecode.FmtAndWrite(filename, buf.String()); err != nil {
-		return err
+		panic(err)
 	}
-	return nil
 }

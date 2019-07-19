@@ -24,7 +24,7 @@ type ErrVoteConflictingVotes struct {
 }
 
 func (err *ErrVoteConflictingVotes) Error() string {
-	return fmt.Sprintf("Conflicting votes from validator %v", err.PubKey.Address())
+	return fmt.Sprintf("Conflicting votes from validator %v", err.PubKey.Address(crypto.GetChainId()))
 }
 
 func NewConflictingVoteError(val *Validator, voteA, voteB *Vote) *ErrVoteConflictingVotes {
@@ -94,16 +94,16 @@ func (vote *Vote) String() string {
 		cmn.PanicSanity("Unknown vote type")
 	}
 
-	addr := vote.ValidatorAddress[14:]
-	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %v @ %s}",
-		vote.ValidatorIndex, cmn.Fingerprint([]byte(addr)),
+	addr := vote.ValidatorAddress
+	return fmt.Sprintf("Vote{%v:%s %v/%02d/%v(%v) %X %v @ %s}",
+		vote.ValidatorIndex, addr,
 		vote.Height, vote.Round, vote.Type, typeString,
 		cmn.Fingerprint(vote.BlockID.Hash), vote.Signature,
 		CanonicalTime(vote.Timestamp))
 }
 
 func (vote *Vote) Verify(chainID string, pubKey crypto.PubKey) error {
-	if pubKey.Address() != vote.ValidatorAddress {
+	if pubKey.Address(crypto.GetChainId()) != vote.ValidatorAddress {
 		return ErrVoteInvalidValidatorAddress
 	}
 

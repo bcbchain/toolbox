@@ -145,23 +145,36 @@ type RPCExport struct {
 	Owner        string
 	Imports      map[parsecode.Import]struct{}
 	Functions    []FatFunction
+	MFunctions   []FatFunction
+	IFunctions   []FatFunction
 	Port         int
 
 	PlainUserStruct []string
 }
 
 // Res2rpc - transform the parsed result to RPC Export struct
-func Res2rpc(res *parsecode.Result) RPCExport {
+func Res2rpc(res *parsecode.Result, flag int64) RPCExport {
 	exp := RPCExport{}
 	exp.PackageName = res.PackageName
-	exp.ReceiverName = res.InitChain.Receiver.Names[0]
+	exp.ReceiverName = strings.ToLower(string([]rune(res.ContractStructure)[0]))
 	exp.ContractName = res.ContractName
 	exp.Version = res.Version
-	imports := make(map[parsecode.Import]struct{})
+	exp.Imports, exp.Functions, exp.PlainUserStruct = opFunctions(res, res.Functions)
+	_, exp.MFunctions, _ = opFunctions(res, res.MFunctions)
 
+	if flag == 2 {
+		exp.Imports, exp.IFunctions, _ = opFunctions(res, res.IFunctions)
+	} else {
+		_, exp.IFunctions, _ = opFunctions(res, res.IFunctions)
+	}
+	return exp
+}
+
+func opFunctions(res *parsecode.Result, funcs []parsecode.Function) (map[parsecode.Import]struct{}, []FatFunction, []string) {
+	imports := make(map[parsecode.Import]struct{})
 	fatFunctions := make([]FatFunction, 0)
 	pus := make([]string, 0)
-	for _, f := range res.Functions {
+	for _, f := range funcs {
 		fat := FatFunction{
 			Function: f,
 		}
@@ -180,10 +193,8 @@ func Res2rpc(res *parsecode.Result) RPCExport {
 		fat.SingleParams = singleParams
 		fatFunctions = append(fatFunctions, fat)
 	}
-	exp.Functions = fatFunctions
-	exp.Imports = imports
-	exp.PlainUserStruct = pus
-	return exp
+
+	return imports, fatFunctions, pus
 }
 
 // GenRPC - generate the rpc server go source
@@ -208,7 +219,7 @@ func GenRPC(res *parsecode.Result, port int, owner, outDir string) error {
 		return err
 	}
 
-	obj := Res2rpc(res)
+	obj := Res2rpc(res, 0)
 	obj.Port = port
 	obj.Owner = owner
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	amino "github.com/tendermint/go-amino"
+	"github.com/tendermint/go-amino"
 	cmn "github.com/tendermint/tmlibs/common"
 	"github.com/tendermint/tmlibs/log"
 
@@ -78,7 +78,9 @@ func (conR *ConsensusReactor) OnStart() error {
 // OnStop implements BaseService
 func (conR *ConsensusReactor) OnStop() {
 	conR.BaseReactor.OnStop()
-	conR.conS.Stop()
+	if e := conR.conS.Stop(); e != nil {
+		conR.Logger.Warn("consensusState Stop ERROR:", "err", e.Error())
+	}
 }
 
 // SwitchToConsensus switches from fast_sync mode to consensus mode.
@@ -394,11 +396,15 @@ func (conR *ConsensusReactor) startBroadcastRoutine() error {
 					conR.broadcastProposalHeartbeatMessage(edph)
 				}
 			case <-conR.Quit():
-				conR.eventBus.UnsubscribeAll(ctx, subscriber)
+				if e := conR.eventBus.UnsubscribeAll(ctx, subscriber); e != nil {
+					conR.Logger.Warn("consensusReactor.eventBus.UnsubscribeAll error:", "err", e.Error())
+				}
 				return
 			}
 			if !ok {
-				conR.eventBus.UnsubscribeAll(ctx, subscriber)
+				if e := conR.eventBus.UnsubscribeAll(ctx, subscriber); e != nil {
+					conR.Logger.Warn("consensusReactor.eventBus.UnsubscribeAll error:", "err", e.Error())
+				}
 				return
 			}
 		}
@@ -453,9 +459,9 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 
 func makeRoundStepMessages(rs *cstypes.RoundState) (nrsMsg *NewRoundStepMessage, csMsg *CommitStepMessage) {
 	nrsMsg = &NewRoundStepMessage{
-		Height: rs.Height,
-		Round:  rs.Round,
-		Step:   rs.Step,
+		Height:                rs.Height,
+		Round:                 rs.Round,
+		Step:                  rs.Step,
 		SecondsSinceStartTime: int(time.Since(rs.StartTime).Seconds()),
 		LastCommitRound:       rs.LastCommit.Round(),
 	}

@@ -4,6 +4,7 @@ import (
 	"blockchain/smccheck/parsecode"
 	"bytes"
 	"path/filepath"
+	"strings"
 	"text/template"
 )
 
@@ -45,7 +46,7 @@ func res2Receipt(res *parsecode.Result) receiptExport {
 	rec := receiptExport{}
 
 	rec.PackageName = res.PackageName
-	rec.ReceiverName = res.InitChain.Receiver.Names[0]
+	rec.ReceiverName = strings.ToLower(string([]rune(res.ContractStructure)[0]))
 	rec.ContractName = res.ContractStructure
 	imports := make(map[parsecode.Import]struct{})
 
@@ -72,7 +73,7 @@ func res2Receipt(res *parsecode.Result) receiptExport {
 
 // focus to generate logic
 // nolint unhandled - because WriteString always return (error)nil
-func GenReceipt(inPath string, res *parsecode.Result) error {
+func GenReceipt(inPath string, res *parsecode.Result) {
 	filename := filepath.Join(inPath, res.PackageName+"_autogen_receipt.go")
 
 	funcMap := template.FuncMap{
@@ -84,7 +85,7 @@ func GenReceipt(inPath string, res *parsecode.Result) error {
 	}
 	tmpl, err := template.New("receipt").Funcs(funcMap).Parse(receiptTemplate)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	rec := res2Receipt(res)
@@ -92,13 +93,12 @@ func GenReceipt(inPath string, res *parsecode.Result) error {
 	var buf bytes.Buffer
 
 	if err = tmpl.Execute(&buf, rec); err != nil {
-		return err
+		panic(err)
 	}
 
 	if err := parsecode.FmtAndWrite(filename, buf.String()); err != nil {
-		return err
+		panic(err)
 	}
-	return nil
 }
 
 // method name to struct name

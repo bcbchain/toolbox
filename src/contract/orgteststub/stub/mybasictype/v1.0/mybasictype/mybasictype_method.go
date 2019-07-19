@@ -66,12 +66,27 @@ func (mc *MyBasicTypeStub) UpdateChain(smc sdk.ISmartContract) (response types.R
 	return response
 }
 
+// UpdateChain update smart contract
+func (mc *MyBasicTypeStub) Mine(smc sdk.ISmartContract) (response types.Response) {
+	contractObj := new(mydice2win.Dice2Win)
+	contractObj.SetSdk(smc)
+	contractObj.UpdateChain()
+
+	response.Code = types.CodeOK
+	return response
+}
+
 // Invoke invoke method
 func (mc *MyBasicTypeStub) Invoke(smc sdk.ISmartContract) (response types.Response) {
+	return mc.InvokeInternal(smc, true)
+}
+
+// Invoke invoke method
+func (mc *MyBasicTypeStub) InvokeInternal(smc sdk.ISmartContract, feeFlag bool) (response types.Response) {
 	defer FuncRecover(&response)
 
 	// 生成手续费收据
-	fee, gasUsed, _, err := common.FeeAndReceipt(smc, true)
+	fee, gasUsed, _, err := common.FeeAndReceipt(smc, feeFlag)
 	if err.ErrorCode != types.CodeOK {
 		response = common.CreateResponse(smc.Message(), nil, "", fee, gasUsed, smc.Tx().GasLimit(), sdkTypes.Error{})
 		return

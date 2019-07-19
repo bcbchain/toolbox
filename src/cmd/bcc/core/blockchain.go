@@ -30,7 +30,12 @@ func RegisterOrg(name, password string, bccParams RegisterOrgParam) (result *Com
 	values := make([]interface{}, 0)
 	values = append(values, bccParams.OrgName)
 
-	var methodID uint32 = 0x9e922f48
+	//查询方法ID
+	methodID, err := QueryMethodID("genesis", contractName, "RegisterOrganization", chainID, keyStorePath, false)
+	if err != nil {
+		return
+	}
+
 	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, false, methodID, values)
 	if err != nil {
 		return
@@ -93,7 +98,12 @@ func SetOrgSigners(name, password string, bccParams SetOrgSignersParam) (result 
 	values = append(values, orgID)
 	values = append(values, pubKeys)
 
-	var methodID uint32 = 0x62191292
+	//查询方法ID
+	methodID, err := QueryMethodID("genesis", contractName, "SetSigners", chainID, keyStorePath, false)
+	if err != nil {
+		return
+	}
+
 	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, false, methodID, values)
 	if err != nil {
 		return
@@ -135,7 +145,12 @@ func SetOrgDeployer(name, password string, bccParams SetOrgDeployerParam) (resul
 	values = append(values, bccParams.Deployer)
 	values = append(values, orgID)
 
-	var methodID uint32 = 0xd7596e75
+	//查询方法ID
+	methodID, err := QueryMethodID("genesis", contractName, "Authorize", chainID, keyStorePath, false)
+	if err != nil {
+		return
+	}
+
 	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID, false, false, methodID, values)
 	if err != nil {
 		return
@@ -179,7 +194,7 @@ func DeployContract(name, password string, bccParams DeployContractParam) (resul
 		return
 	}
 
-	effectHeight, orgID, codeHash, codeData, devSig, orgSig, err := getDeployContractData(bccParams)
+	effectHeight, orgID, codeHash, codeData, devSig, orgSig, err := getDeployContractData(bccParams, chainID)
 	if err != nil {
 		return
 	}
@@ -195,7 +210,12 @@ func DeployContract(name, password string, bccParams DeployContractParam) (resul
 	values = append(values, effectHeight)
 	values = append(values, bccParams.Owner)
 
-	var methodID uint32 = 0xe0da7827
+	//查询方法ID
+	methodID, err := QueryMethodID("genesis", contractName, "DeployContract", chainID, keyStorePath, false)
+	if err != nil {
+		return
+	}
+
 	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID,
 		false, false, methodID, values)
 	if err != nil {
@@ -253,7 +273,12 @@ func RegisterToken(name, password string, bccParams RegisterTokenParam) (result 
 	values = append(values, burnEnabled)
 	values = append(values, gasPrice)
 
-	var methodID uint32 = 0xed1d1d9a
+	//查询方法ID
+	methodID, err := QueryMethodID("genesis", contractName, "NewToken", chainID, keyStorePath, false)
+	if err != nil {
+		return
+	}
+
 	result, err = packAndCommitTx(name, password, contractName, bccParams.GasLimit, bccParams.Note, keyStorePath, chainID,
 		false, false, methodID, values)
 	if err != nil {
@@ -324,7 +349,7 @@ func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, ch
 		return
 	}
 
-	contract, err := contractOfTokenName(chainID, token)
+	tokenAddr, err := tokenAddressFromName(chainID, token)
 	if err != nil {
 		return
 	}
@@ -340,7 +365,7 @@ func transfer(name, password, token, gasLimit, note, to, value, keyStorePath, ch
 	}
 	v := bn.NewNumberStringBase(value, 10)
 	bccParamss := makeParams(to, v)
-	txStr := GenerateTx(contract.Address, method, bccParamss, nonce, int64(uGasLimit), note, privStr)
+	txStr := GenerateTx(tokenAddr, method, bccParamss, nonce, int64(uGasLimit), note, privStr)
 
 	result, err = CommitTx(chainID, txStr)
 	if err != nil {
@@ -416,7 +441,7 @@ func getRegisterTokenData(bccParams RegisterTokenParam) (totalSupply bn.Number, 
 	return
 }
 
-func getDeployContractData(bccParams DeployContractParam) (
+func getDeployContractData(bccParams DeployContractParam, chainID string) (
 	effectHeightInt int,
 	orgID string,
 	codeHash []byte,
@@ -442,10 +467,15 @@ func getDeployContractData(bccParams DeployContractParam) (
 	}
 
 	codeHash = sha3.Sum256(codeData)
-	effectHeightInt, err = strconv.Atoi(bccParams.EffectHeight)
+	blh, err := BlockHeight(chainID)
 	if err != nil {
 		return
 	}
+	HeightInt, err := strconv.Atoi(bccParams.EffectHeight)
+	if err != nil {
+		return
+	}
+	effectHeightInt = int(blh.LastBlock) + HeightInt
 
 	bh := helper.BlockChainHelper{}
 	orgID = bh.CalcOrgID(bccParams.OrgName)

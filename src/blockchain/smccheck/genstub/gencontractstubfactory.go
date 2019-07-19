@@ -18,13 +18,12 @@ import (
 	"github.com/tendermint/tmlibs/log"
 
 	{{- range $i,$directionName := $.DirectionNames}}
-	{{getName $i $.PackageNames}}{{replace (version $i $.Versions)}} "contract/{{$.OrgID}}/stub/{{$directionName}}/v{{version $i $.Versions}}/{{$directionName}}"
+	{{getName $i $.PackageNames}}{{replace (version $i $.Versions)}} "contract/{{getOrgID $i $.OrgIDs}}/stub/{{$directionName}}/v{{version $i $.Versions}}/{{$directionName}}"
 	{{- end}}
 )
 
 func NewStub(smc sdk.ISmartContract, logger log.Logger) types.IContractStub {
 
-	logger.Debug(fmt.Sprintf("NewStub error, contract=%s,version=%s", smc.Message().Contract().Name(), smc.Message().Contract().Version()))
 	switch common.CalcKey(smc.Message().Contract().Name(), smc.Message().Contract().Version()) {
 	{{- range $j,$contractName := $.ContractNames}}
 	case "{{$contractName}}{{replace (version $j $.Versions)}}":
@@ -39,7 +38,7 @@ func NewStub(smc sdk.ISmartContract, logger log.Logger) types.IContractStub {
 `
 
 type OrgContracts struct {
-	OrgID          string
+	OrgIDs         []string
 	DirectionNames []string
 	ContractNames  []string
 	PackageNames   []string
@@ -49,7 +48,7 @@ type OrgContracts struct {
 func res2factory(reses []*parsecode.Result) OrgContracts {
 
 	factory := OrgContracts{
-		OrgID:          reses[0].OrgID,
+		OrgIDs:         make([]string, 0),
 		DirectionNames: make([]string, 0),
 		ContractNames:  make([]string, 0),
 		PackageNames:   make([]string, 0),
@@ -57,6 +56,7 @@ func res2factory(reses []*parsecode.Result) OrgContracts {
 	}
 
 	for _, res := range reses {
+		factory.OrgIDs = append(factory.OrgIDs, res.OrgID)
 		factory.DirectionNames = append(factory.DirectionNames, res.DirectionName)
 		factory.ContractNames = append(factory.ContractNames, res.ContractName)
 		factory.PackageNames = append(factory.PackageNames, res.PackageName)
@@ -67,9 +67,9 @@ func res2factory(reses []*parsecode.Result) OrgContracts {
 }
 
 // GenConStFactory - generate the contract stub factory go source
-func GenConStFactory(reses []*parsecode.Result, outDir string) error {
+func GenConStFactory(reses []*parsecode.Result, outDir string) {
 	if err := os.MkdirAll(outDir, os.FileMode(0750)); err != nil {
-		return err
+		panic(err)
 	}
 	filename := filepath.Join(outDir, "contractstubfactory.go")
 
@@ -83,11 +83,14 @@ func GenConStFactory(reses []*parsecode.Result, outDir string) error {
 		"getName": func(index int, packageNames []string) string {
 			return packageNames[index]
 		},
+		"getOrgID": func(index int, orgIDs []string) string {
+			return orgIDs[index]
+		},
 	}
 
 	tmpl, err := template.New("contractStubFactory").Funcs(funcMap).Parse(templateText)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	factory := res2factory(reses)
@@ -95,11 +98,10 @@ func GenConStFactory(reses []*parsecode.Result, outDir string) error {
 	var buf bytes.Buffer
 
 	if err = tmpl.Execute(&buf, factory); err != nil {
-		return err
+		panic(err)
 	}
 
 	if err := parsecode.FmtAndWrite(filename, buf.String()); err != nil {
-		return err
+		panic(err)
 	}
-	return nil
 }

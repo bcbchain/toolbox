@@ -20,7 +20,7 @@ func NewTestObject(sender sdk.IAccount) *TestObject {
 	return &TestObject{&TestSdk{sdk: ut.UTP.ISmartContract}}
 }
 func (t *TestObject) transfer(balance Number) *TestObject {
-	t.obj.sdk.Message().Sender().Transfer(t.obj.sdk.Message().Contract().Account(), balance)
+	t.obj.sdk.Message().Sender().Transfer(t.obj.sdk.Message().Contract().Account().Address(), balance)
 	return t
 }
 func (t *TestObject) setSender(sender sdk.IAccount) *TestObject {

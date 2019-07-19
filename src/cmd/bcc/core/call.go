@@ -87,10 +87,16 @@ func call(name, password, orgName, contractName, methodName, file, params, split
 		return nil, errors.New("invalid method")
 	}
 
-	// encode method parameters
-	rlpBytes, err := encode(item, splitBy, file, params)
-	if err != nil {
-		return
+	arrayMethod := strings.Split(item.ProtoType, "(")
+
+	rlpBytes := make([]common.HexBytes, 0)
+
+	if arrayMethod[1][:1] != ")" {
+		// encode method parameters
+		rlpBytes, err = encode(item, splitBy, file, params)
+		if err != nil {
+			return
+		}
 	}
 
 	uGasLimit, err := requireUint64("gasLimit", gasLimit, 10)
@@ -178,12 +184,12 @@ func createTransferMsg(contract *std.Contract, value bn.Number, token, chainID s
 
 	rlpBytes := tx2.WrapInvokeParams(contract.Account, value)
 
-	tokenContract, err := contractOfTokenName(chainID, token)
+	tokenAddress, err := tokenAddressFromName(chainID, token)
 	if err != nil {
 		return
 	}
 
-	transferMsg = types.Message{Contract: tokenContract.Address, MethodID: 0x44d8ca60, Items: rlpBytes}
+	transferMsg = types.Message{Contract: tokenAddress, MethodID: 0x44d8ca60, Items: rlpBytes}
 
 	return
 }

@@ -2,8 +2,9 @@ package commands
 
 import (
 	"fmt"
-	"github.com/tendermint/tendermint/state"
 	"strconv"
+
+	"github.com/tendermint/tendermint/state"
 
 	"github.com/spf13/cobra"
 

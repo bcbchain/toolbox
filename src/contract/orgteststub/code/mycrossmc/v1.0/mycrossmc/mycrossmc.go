@@ -43,12 +43,17 @@ func (ms *MyCrossmc) InitChain() {
 func (ms *MyCrossmc) Register(data uint64) {
 	_to := ms.sdk.Helper().ContractHelper().ContractOfName(importContractName).Account()
 	_from := ms.sdk.Message().Contract().Account()
-	ms.sdk.Helper().AccountHelper().AccountOf(_from).TransferByName("LOC", _to, bn.N(1000000))
+	_from.TransferByName("LOC", _to.Address(), bn.N(1000000))
 	plyr := Player{
 		Address: "locNUjCm1i8RcoW2kVTbDw4vKW6jzfMxewJH",
 		Name:    "bob",
 	}
-	ms.myplayerbookStub().RegisterName(55, plyr)
+
+	ms.myplayerbook().run(func() {
+		_from.TransferByName("LOC", _to.Address(), bn.N(1000000))
+	}).RegisterName(55, plyr)
+
+	ms.myplayerbook().RegisterName(55, plyr)
 	ms._setStoredData(data)
 }
 
@@ -59,7 +64,7 @@ func (ms *MyCrossmc) MultParam() {
 	mv := make(map[int]string)
 	mv[999] = "testmap"
 
-	ms.myplayerbookStub().MultiTypeParam(100, 20.22, true, 50, []byte("testhash"), b, bn.N(-888888), mv)
+	ms.myplayerbook().MultiTypeParam(100, 20.22, true, 50, []byte("testhash"), b, bn.N(-888888), mv)
 }
 
 //Set sets data

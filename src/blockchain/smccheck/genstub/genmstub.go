@@ -13,21 +13,25 @@ import (
 const stubTemplate = `package {{$.PackageName}}stub
 
 import (
+	"blockchain/smcsdk/sdkimpl"
 	bcType "blockchain/types"
+	"strings"
+	"runtime"
+	"fmt"
 
 	"blockchain/smcsdk/sdk"
 	"contract/stubcommon/common"
 	stubType "contract/stubcommon/types"
 	tmcommon "github.com/tendermint/tmlibs/common"
 	"blockchain/smcsdk/sdk/types"
-	{{if (hasStruct .Functions)}}. "contract/{{$.OrgID}}/code/{{$.DirectionName}}/v{{$.Version}}/{{$.DirectionName}}"{{end}}
+	{{if (hasStruct .MFunctions)}}. "contract/{{$.OrgID}}/code/{{$.DirectionName}}/v{{$.Version}}/{{$.DirectionName}}"{{end}}
 
 	"github.com/tendermint/tmlibs/log"
-	{{- if (hasMethod .Functions)}}
+	{{- if (hasParam .MFunctions)}}
 	"blockchain/smcsdk/sdk/rlp"
-	"contract/{{$.OrgID}}/code/{{$.DirectionName}}/v{{$.Version}}/{{$.DirectionName}}"
 	{{- end}}
-	{{- if (hasResult .Functions)}}
+	"contract/{{$.OrgID}}/code/{{$.DirectionName}}/v{{$.Version}}/{{$.DirectionName}}"
+	{{- if (hasResult .MFunctions)}}
 	"blockchain/smcsdk/sdk/jsoniter"
 	{{- end}}
 
@@ -59,10 +63,45 @@ func FuncRecover(response *bcType.Response) {
 			error := err.(types.Error)
 			response.Code = error.ErrorCode
 			response.Log = error.Error()
+		} else if e, ok := err.(error); ok {
+			if strings.HasPrefix(e.Error(), "runtime error") {
+				logCaller()
+				response.Code = types.ErrStubDefined
+				response.Log = e.Error()
+			} else {
+				panic(err)
+			}
 		} else {
 			panic(err)
 		}
 	}
+}
+
+func logCaller() {
+	caller := ""
+	skip := 0
+	_, callerFile, callerLine, ok := runtime.Caller(skip)
+	if !ok {
+		return
+	}
+	caller += fmt.Sprintf("%s %d\n", callerFile, callerLine)
+	var testFile string
+	var testLine int
+	for {
+		skip++
+		if _, file, line, ok := runtime.Caller(skip); ok {
+			testFile, testLine = file, line
+			caller += fmt.Sprintf("%s %d\n", callerFile, callerLine)
+		} else {
+			break
+		}
+	}
+	if testFile != "" && (testFile != callerFile || testLine != callerLine) {
+	caller += fmt.Sprintf("%s %d\n", callerFile, callerLine)
+	}
+	caller += fmt.Sprintf("%s %d\n", callerFile, callerLine)
+
+	sdkimpl.Logger.Error(caller)
 }
 
 // InitChain initial smart contract
@@ -93,12 +132,32 @@ func (pbs *{{$stubName}}) UpdateChain(smc sdk.ISmartContract) (response bcType.R
 	return response
 }
 
+// Mine call mine of smart contract
+func (pbs *{{$stubName}}) Mine(smc sdk.ISmartContract) (response bcType.Response) {
+	defer FuncRecover(&response)
+	
+	{{- if $.IsExistMine}}
+	contractObj := new({{$.PackageName}}.{{$.ContractStruct}})
+	contractObj.SetSdk(smc)
+	rewardAmount := contractObj.Mine()
+	response.Data = fmt.Sprintf("%d", rewardAmount)
+	{{- end}}	
+
+	response.Code = types.CodeOK
+	return response
+}
+
 //Invoke invoke function
 func (pbs *{{$stubName}}) Invoke(smc sdk.ISmartContract) (response bcType.Response) {
+	return pbs.InvokeInternal(smc, true)
+}
+
+//InvokeInternal invoke function
+func (pbs *{{$stubName}}) InvokeInternal(smc sdk.ISmartContract, feeFlag bool) (response bcType.Response) {
 	defer FuncRecover(&response)
 
 	// 生成手续费收据
-	fee, gasUsed, feeReceipt, err := common.FeeAndReceipt(smc, true)
+	fee, gasUsed, feeReceipt, err := common.FeeAndReceipt(smc, feeFlag)
 	response.Fee = fee
 	response.GasUsed = gasUsed
  	response.Tags = append(response.Tags, tmcommon.KVPair{Key:feeReceipt.Key, Value:feeReceipt.Value})
@@ -112,7 +171,7 @@ func (pbs *{{$stubName}}) Invoke(smc sdk.ISmartContract) (response bcType.Respon
 
 	pbs.logger.Debug("invoke", "methodID", smc.Message().MethodID())
 	switch smc.Message().MethodID() {
-	{{- range $i,$f := $.Functions}}
+	{{- range $i,$f := $.MFunctions}}
 	case "{{$f.Method | createProto | calcMethodID | printf "%x"}}":	// prototype: {{createProto $f.Method}}
 		{{if eq (len $f.Results) 1}}data = {{end}}_{{lowerFirst $f.Name}}(smc)
 	{{- end}}
@@ -123,7 +182,7 @@ func (pbs *{{$stubName}}) Invoke(smc sdk.ISmartContract) (response bcType.Respon
 	return
 }
 
-{{range $i0,$f := $.Functions}}
+{{range $i0,$f := $.MFunctions}}
 func _{{lowerFirst $f.Name}}(smc sdk.ISmartContract) {{if (len $f.Results)}}string{{end}} {
 	items := smc.Message().Items()
 	sdk.Require(len(items) == {{paramsLen $f.Method}}, types.ErrStubDefined, "Invalid message data")
@@ -170,10 +229,13 @@ type StubExport struct {
 	Owner          string
 	Imports        map[parsecode.Import]struct{}
 	Functions      []FatFunction
+	MFunctions     []FatFunction
+	IFunctions     []FatFunction
 	Port           int
 
 	IsExistUpdateChain bool
 	IsExistInitChain   bool
+	IsExistMine        bool
 	PlainUserStruct    []string
 }
 
@@ -182,7 +244,7 @@ func Res2stub(res *parsecode.Result) StubExport {
 	exp := StubExport{}
 	exp.DirectionName = res.DirectionName
 	exp.PackageName = res.PackageName
-	exp.ReceiverName = res.InitChain.Receiver.Names[0]
+	exp.ReceiverName = strings.ToLower(string([]rune(res.ContractStructure)[0]))
 	exp.ContractName = res.ContractName
 	exp.ContractStruct = res.ContractStructure
 	exp.OrgID = res.OrgID
@@ -190,11 +252,19 @@ func Res2stub(res *parsecode.Result) StubExport {
 	exp.Versions = res.Versions
 	exp.IsExistUpdateChain = res.IsExistUpdateChain
 	exp.IsExistInitChain = res.IsExistInitChain
-	imports := make(map[parsecode.Import]struct{})
+	exp.IsExistMine = res.IsExistMine
 
+	exp.Imports, exp.Functions, exp.PlainUserStruct = opFunctions(res, res.Functions)
+	_, exp.MFunctions, _ = opFunctions(res, res.MFunctions)
+	_, exp.IFunctions, _ = opFunctions(res, res.IFunctions)
+	return exp
+}
+
+func opFunctions(res *parsecode.Result, funcs []parsecode.Function) (map[parsecode.Import]struct{}, []FatFunction, []string) {
+	imports := make(map[parsecode.Import]struct{})
 	fatFunctions := make([]FatFunction, 0)
 	pus := make([]string, 0)
-	for _, f := range res.Functions {
+	for _, f := range funcs {
 		fat := FatFunction{
 			Function: f,
 		}
@@ -213,17 +283,15 @@ func Res2stub(res *parsecode.Result) StubExport {
 		fat.SingleParams = singleParams
 		fatFunctions = append(fatFunctions, fat)
 	}
-	exp.Functions = fatFunctions
-	exp.Imports = imports
-	exp.PlainUserStruct = pus
-	return exp
+
+	return imports, fatFunctions, pus
 }
 
 // GenMethodStub - generate the method stub go source
-func GenMethodStub(res *parsecode.Result, outDir string) error {
+func GenMethodStub(res *parsecode.Result, outDir string) {
 	newOutDir := filepath.Join(outDir, "v"+res.Version, res.DirectionName)
 	if err := os.MkdirAll(newOutDir, os.FileMode(0750)); err != nil {
-		return err
+		panic(err)
 	}
 	filename := filepath.Join(newOutDir, res.PackageName+"stub_method.go")
 
@@ -241,8 +309,11 @@ func GenMethodStub(res *parsecode.Result, outDir string) error {
 			return i - 1
 		},
 		"hasMethod": func(functions []FatFunction) bool {
-			for _, function := range functions {
-				if function.MGas != 0 {
+			return len(functions) != 0
+		},
+		"hasParam": func(functions []FatFunction) bool {
+			for _, f := range functions {
+				if len(f.Params) != 0 {
 					return true
 				}
 			}
@@ -251,7 +322,7 @@ func GenMethodStub(res *parsecode.Result, outDir string) error {
 		},
 		"hasResult": func(functions []FatFunction) bool {
 			for _, function := range functions {
-				if function.MGas != 0 && len(function.Results) > 0 {
+				if len(function.Results) > 0 {
 					return true
 				}
 			}
@@ -261,7 +332,7 @@ func GenMethodStub(res *parsecode.Result, outDir string) error {
 	}
 	tmpl, err := template.New("methodStub").Funcs(funcMap).Parse(stubTemplate)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	obj := Res2stub(res)
@@ -269,13 +340,12 @@ func GenMethodStub(res *parsecode.Result, outDir string) error {
 	var buf bytes.Buffer
 
 	if err = tmpl.Execute(&buf, obj); err != nil {
-		return err
+		panic(err)
 	}
 
 	if err := parsecode.FmtAndWrite(filename, buf.String()); err != nil {
-		return err
+		panic(err)
 	}
-	return nil
 }
 
 func hasStruct(functions []FatFunction) bool {

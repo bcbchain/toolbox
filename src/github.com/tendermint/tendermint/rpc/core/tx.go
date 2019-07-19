@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"encoding/hex"
+
 	abci "github.com/tendermint/abci/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	sm "github.com/tendermint/tendermint/state"
@@ -117,7 +118,7 @@ func Tx(hash string, prove bool) (*ctypes.ResultTx, error) {
 	var stateCode uint32
 	var height int64
 	check := true
-	deTx, err := hex.DecodeString(hash)
+	deTx, _ := hex.DecodeString(hash)
 	dResult, err := sm.LoadABCITxResponses(stateDB, cmn.HexBytes(deTx))
 	if err == nil {
 		height = dResult.Height

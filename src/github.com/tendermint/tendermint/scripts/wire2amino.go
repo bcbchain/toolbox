@@ -85,7 +85,7 @@ func convertPrivVal(cdc *amino.Codec, jsonBytes []byte) ([]byte, error) {
 	copy(pubKey[:], privVal.PubKey.Data)
 
 	privValNew := priv_val.FilePV{
-		Address:    pubKey.Address(),
+		Address:    pubKey.Address(crypto.GetChainId()),
 		PubKey:     pubKey,
 		LastHeight: privVal.LastHeight,
 		LastRound:  privVal.LastRound,

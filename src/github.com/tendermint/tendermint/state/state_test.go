@@ -276,7 +276,7 @@ func TestManyValidatorChangesSaveLoad(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, valSetSize, v.Size())
 
-	index, val := v.GetByAddress(pubkey.Address())
+	index, val := v.GetByAddress(pubkey.Address("devtest"))
 	assert.NotNil(t, val)
 	if index < 0 {
 		t.Fatal("expected to find newly added validator")
@@ -370,10 +370,6 @@ func makeParams(blockBytes, blockTx, blockGas, txBytes,
 			BlockPartSizeBytes: partSize,
 		},
 	}
-}
-
-func pk() []byte {
-	return crypto.GenPrivKeyEd25519().PubKey().Bytes()
 }
 
 func TestApplyUpdates(t *testing.T) {

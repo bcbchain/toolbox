@@ -94,7 +94,7 @@ func (v ValKeys) signHeader(header *types.Header, first, last int) *types.Commit
 }
 
 func makeVote(header *types.Header, vals *types.ValidatorSet, key crypto.PrivKey) *types.Vote {
-	addr := key.PubKey().Address()
+	addr := key.PubKey().Address(crypto.GetChainId())
 	idx, _ := vals.GetByAddress(addr)
 	vote := &types.Vote{
 		ValidatorAddress: addr,

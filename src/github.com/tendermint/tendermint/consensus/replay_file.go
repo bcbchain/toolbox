@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/tendermint/tendermint/proxy"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/tendermint/tendermint/proxy"
 
 	"github.com/pkg/errors"
 
@@ -283,10 +284,13 @@ func newConsensusStateForReplay(config *cfg.Config) *ConsensusState {
 	dbType := dbm.DBBackendType(config.DBBackend)
 	// Get BlockStore
 	blockStoreDB := dbm.NewDB("blockstore", dbType, config.DBDir())
-	blockStore := bc.NewBlockStore(blockStoreDB)
 
 	// Get State
 	stateDB := dbm.NewDB("state", dbType, config.DBDir())
+	stateDBx := dbm.NewDB("state2", dbType, config.DBDir())
+
+	blockStore := bc.NewBlockStore(stateDBx, blockStoreDB)
+
 	gdoc, err := sm.MakeGenesisDocFromFile(config)
 	if err != nil {
 		cmn.Exit(err.Error())
@@ -299,7 +303,7 @@ func newConsensusStateForReplay(config *cfg.Config) *ConsensusState {
 	// Create proxyAppConn connection (consensus, mempool, query)
 	clientCreator := proxy.DefaultClientCreator(config.ProxyApp[0], config.ABCI, config.DBDir())
 	proxyApp := proxy.NewAppConns(clientCreator,
-		NewHandshaker(stateDB, state, blockStore, gdoc, config))
+		NewHandshaker(stateDBx, stateDB, state, blockStore, gdoc, config))
 	err = proxyApp.Start()
 	if err != nil {
 		cmn.Exit(cmn.Fmt("Error starting proxy app conns: %v", err))
@@ -311,7 +315,7 @@ func newConsensusStateForReplay(config *cfg.Config) *ConsensusState {
 	}
 
 	mempool, evpool := types.MockMempool{}, types.MockEvidencePool{}
-	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
+	blockExec := sm.NewBlockExecutor(stateDBx, stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
 	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec,
 		blockStore, mempool, evpool)

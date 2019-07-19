@@ -16,8 +16,7 @@ func (t *TestAccount) transferTestTransferValue(byType string) {
 	fmt.Println("\nTEST CASE: 测试转账金额")
 	fmt.Printf(" transferTestTransferValue(%v)\n", byType)
 
-	accAddr := t.sdk.Message().Contract().Account()
-	acct := t.sdk.Helper().AccountHelper().AccountOf(accAddr)
+	acct := t.sdk.Message().Contract().Account()
 	sender := t.sdk.Message().Sender()
 
 	tokenAddr := t.sdk.Helper().TokenHelper().Token().Address()
@@ -71,8 +70,7 @@ func (t *TestAccount) transferSenderNoAuth(byType string) {
 	fmt.Println("\nTEST CASE: 构造普通用户，测试转账权限")
 	fmt.Printf(" transferSenderNoAuth(%v)\n", byType)
 
-	accAddr := t.sdk.Message().Contract().Account()
-	acct := t.sdk.Helper().AccountHelper().AccountOf(accAddr)
+	acct := t.sdk.Message().Contract().Account()
 
 	//Transfer to a normal user
 	pubkey, _ := hex.DecodeString("AAE0014B0B08BB79B17B996ECABEDA6BF02534B64917631BB5DE59FB411B1083")
@@ -303,7 +301,7 @@ func (t *TestAccount) transferTestGenesisToken(byType string) {
 	fmt.Printf(" transferTestGenesisToken(%v)\n", byType)
 
 	sender := t.sdk.Message().Sender()
-	contractAcc := t.sdk.Helper().AccountHelper().AccountOf(t.sdk.Message().Contract().Account())
+	contractAcc := t.sdk.Message().Contract().Account()
 	//Transfer to a normal user
 	pubkey, _ := hex.DecodeString("AAE0014B0B08BB79B17B996ECABEDA6BF02534B64917631BB5DE59FB411B1083")
 	recv := t.sdk.Helper().AccountHelper().AccountOfPubKey(pubkey)

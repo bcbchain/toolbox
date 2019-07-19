@@ -11,7 +11,7 @@ func (t *TestToken) setTotalSupplyBurnAndAddEnabled() {
 
 	pk := []byte("f1edf8f50848b8fa121a24e2a3a83cc5")
 	tmp := t.sdk.Helper().AccountHelper().AccountOfPubKey(pk).Address()
-	account := t.sdk.Helper().AccountHelper().AccountOf(t.sdk.Message().Contract().Owner())
+	account := t.sdk.Helper().AccountHelper().AccountOf(t.sdk.Message().Contract().Owner().Address())
 	transferCount := account.Balance().DivI(2)
 	account.Transfer(tmp, transferCount)
 
@@ -68,7 +68,7 @@ func (t *TestToken) setTotalSupplyBurnEnabledAndAddDisabled() {
 
 	pk := []byte("f1edf8f50848b8fa121a24e2a3a83cc5")
 	tmp := t.sdk.Helper().AccountHelper().AccountOfPubKey(pk).Address()
-	account := t.sdk.Helper().AccountHelper().AccountOf(t.sdk.Message().Contract().Owner())
+	account := t.sdk.Helper().AccountHelper().AccountOf(t.sdk.Message().Contract().Owner().Address())
 	transferCount := account.Balance().DivI(2)
 	account.Transfer(tmp, transferCount)
 
@@ -151,7 +151,7 @@ func (t *TestToken) testAddress(address types.Address) {
 }
 
 func (t *TestToken) testOwner(owner types.Address) {
-	Assert(owner == t.sdk.Helper().TokenHelper().Token().Owner())
+	Assert(owner == t.sdk.Helper().TokenHelper().Token().Owner().Address())
 }
 
 func (t *TestToken) testName(name string) {

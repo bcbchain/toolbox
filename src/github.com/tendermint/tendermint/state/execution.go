@@ -24,9 +24,10 @@ var SyncTo int64 = 0
 
 // BlockExecutor provides the context and accessories for properly executing a block.
 type BlockExecutor struct {
-	// save state, validators, consensus params, abci responses here
+	// save validators, consensus params, abci responses here
 	db dbm.DB
-
+	// save state
+	dbx dbm.DB
 	// execute the app against this
 	proxyApp proxy.AppConnConsensus
 
@@ -42,10 +43,11 @@ type BlockExecutor struct {
 
 // NewBlockExecutor returns a new BlockExecutor with a NopEventBus.
 // Call SetEventBus to provide one.
-func NewBlockExecutor(db dbm.DB, logger log.Logger, proxyApp proxy.AppConnConsensus,
+func NewBlockExecutor(dbx dbm.DB, db dbm.DB, logger log.Logger, proxyApp proxy.AppConnConsensus,
 	mempool types.Mempool, evpool types.EvidencePool) *BlockExecutor {
 	return &BlockExecutor{
 		db:       db,
+		dbx:      dbx,
 		proxyApp: proxyApp,
 		eventBus: types.NopEventBus{},
 		mempool:  mempool,
@@ -125,9 +127,9 @@ func (blockExec *BlockExecutor) ApplyBlock(s State, blockID types.BlockID, block
 		s.LastAllocation = append(s.LastAllocation, abci.Allocation{Addr: k, Fee: v})
 	}
 
-	blockExec.logger.Info("block apply", "height", block.Height, "got hash", s.LastAppHash, "s.LastTxsHashList", s.LastTxsHashList)
+	blockExec.logger.Info("block apply", "height", block.Height, "got hash", s.LastAppHash, "s.LastTxsHashList.length", len(s.LastTxsHashList))
 
-	SaveState(blockExec.db, s)
+	SaveState(blockExec.dbx, s)
 
 	fail.Fail() // XXX
 
@@ -153,11 +155,11 @@ func (blockExec *BlockExecutor) Commit(block *types.Block) (*abci.ResponseCommit
 
 	// while mempool is Locked, flush to ensure all async requests have completed
 	// in the ABCI app before Commit.
-	err := blockExec.mempool.FlushAppConn()
-	if err != nil {
-		blockExec.logger.Error("Client error during mempool.FlushAppConn", "err", err)
-		return nil, err
-	}
+	//err := blockExec.mempool.FlushAppConn()
+	//if err != nil {
+	//	blockExec.logger.Error("Client error during mempool.FlushAppConn", "err", err)
+	//	return nil, err
+	//}
 
 	// Commit block, get hash back
 	res, err := blockExec.proxyApp.CommitSync()
@@ -267,10 +269,6 @@ func execBlockOnProxyApp(logger log.Logger, proxyAppConn proxy.AppConnConsensus,
 		logger.Info("Updates to validators", "updates", abci.ValidatorsString(valUpdates))
 	}
 
-	if abciResponses.EndBlock.ChainVersion != 0 {
-		logger.Info("Upgrade chain version", "chainVersion", abciResponses.EndBlock.ChainVersion)
-	}
-
 	return abciResponses, nil
 }
 
@@ -284,7 +282,7 @@ func updateValidators(currentSet *types.ValidatorSet, updates []abci.Validator) 
 			return err
 		}
 
-		address := pubkey.Address()
+		address := pubkey.Address(crypto.GetChainId())
 		power := v.Power
 		// mind the overflow from int64
 		if power < 0 {
@@ -358,6 +356,11 @@ func updateState(s State, blockID types.BlockID, header *types.Header,
 		chainVersion = abciResponses.EndBlock.ChainVersion
 	}
 
+	var lastMining *int64
+	if abciResponses.EndBlock.RewardAmount != 0 {
+		lastMining = &abciResponses.EndBlock.RewardAmount
+	}
+
 	// NOTE: the AppHash has not been populated.
 	// It will be filled on state.Save.
 	return State{
@@ -374,6 +377,7 @@ func updateState(s State, blockID types.BlockID, header *types.Header,
 		LastResultsHash:                  abciResponses.ResultsHash(),
 		LastAppHash:                      nil,
 		ChainVersion:                     chainVersion,
+		LastMining:                       lastMining,
 	}, nil
 }
 
@@ -384,18 +388,23 @@ func fireEvents(logger log.Logger, eventBus types.BlockEventPublisher, block *ty
 	// NOTE: do we still need this buffer ?
 	txEventBuffer := types.NewTxEventBuffer(eventBus, int(block.NumTxs))
 	for i, tx := range block.Data.Txs {
-		txEventBuffer.PublishEventTx(types.EventDataTx{types.TxResult{
+		if e := txEventBuffer.PublishEventTx(types.EventDataTx{TxResult: types.TxResult{
 			Height: block.Height,
 			Index:  uint32(i),
 			Tx:     tx,
 			Result: *(abciResponses.DeliverTx[i]),
-		}})
+		}}); e != nil {
+			logger.Warn("txEventBuffer.PublishEventTx", "e", e.Error())
+		}
 	}
 
-	eventBus.PublishEventNewBlock(types.EventDataNewBlock{block})
-	eventBus.PublishEventNewBlockHeader(types.EventDataNewBlockHeader{block.Header})
-	err := txEventBuffer.Flush()
-	if err != nil {
+	if e := eventBus.PublishEventNewBlock(types.EventDataNewBlock{Block: block}); e != nil {
+		logger.Warn("eventBus.PublishEventNewBlock", "e", e.Error())
+	}
+	if e := eventBus.PublishEventNewBlockHeader(types.EventDataNewBlockHeader{Header: block.Header}); e != nil {
+		logger.Warn("eventBus.PublishEventNewBlockHeader", "e", e.Error())
+	}
+	if err := txEventBuffer.Flush(); err != nil {
 		logger.Error("Failed to flush event buffer", "err", err)
 	}
 }

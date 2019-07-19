@@ -4,10 +4,11 @@ import (
 	"blockchain/algorithm"
 	"bytes"
 	"container/list"
-	"github.com/tendermint/tendermint/proxy"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/tendermint/tendermint/proxy"
 
 	"github.com/pkg/errors"
 
@@ -283,11 +284,11 @@ func (mem *Mempool) resCbNormal(req *abci.Request, res *abci.Response) {
 				tx:      tx,
 			}
 			mem.txs.PushBack(memTx)
-			mem.logger.Info("Added good transaction", "res", r)
+			mem.logger.Debug("Added good transaction", "tx", string(tx))
 			mem.notifyTxsAvailable()
 		} else {
 			// ignore bad transaction
-			mem.logger.Info("Rejected bad transaction", "res", r)
+			mem.logger.Debug("Rejected bad transaction", "resCode", r.CheckTx.Code, "resLog", r.CheckTx.Log, "tx", string(tx))
 
 			// remove from cache (it might be good later)
 			mem.cache.Remove(tx)
@@ -347,7 +348,7 @@ func (mem *Mempool) TxsAvailable() <-chan int64 {
 
 func (mem *Mempool) notifyTxsAvailable() {
 	if mem.Size() == 0 {
-		panic("notified txs available but mempool is empty!")
+		return
 	}
 	if mem.txsAvailable != nil && !mem.notifiedTxsAvailable {
 		mem.notifiedTxsAvailable = true

@@ -2,11 +2,15 @@ package core
 
 import (
 	tx1 "blockchain/abciapp_v1.0/tx/tx"
+	types2 "blockchain/abciapp_v1.0/types"
+	"blockchain/smcsdk/sdk"
 	"blockchain/smcsdk/sdk/bn"
 	"blockchain/smcsdk/sdk/rlp"
 	"blockchain/smcsdk/sdk/std"
+	"blockchain/smcsdk/sdkimpl/helper"
 	"blockchain/tx2"
 	"blockchain/types"
+	"cmd/bcc/cache"
 	"cmd/bcc/common"
 	"common/wal"
 	"encoding/base64"
@@ -14,15 +18,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tendermint/go-crypto"
+	"github.com/tendermint/tendermint/rpc/core/types"
 	"io/ioutil"
 	"math/big"
-	"strconv"
 	"strings"
-
-	"github.com/tendermint/go-crypto"
-
-	"github.com/tendermint/tendermint/rpc/core/types"
+	"time"
 )
+
+//Query query state db with path
+func Query(path string, data []byte, height int64, trusted bool, chainID string) (query *types2.ResultABCIQuery, err error) {
+	return
+}
 
 //BlockHeight blockHeight query
 func BlockHeight(chainID string) (blkHeight *BlockHeightResult, err error) {
@@ -33,7 +40,7 @@ func BlockHeight(chainID string) (blkHeight *BlockHeightResult, err error) {
 
 	result := new(core_types.ResultABCIInfo)
 	params := map[string]interface{}{}
-	err = DoHttpRequestAndParse(addrS, "abci_info", params, result)
+	err = common.DoHttpRequestAndParse(addrS, "abci_info", params, result)
 	if err != nil {
 		return
 	}
@@ -44,28 +51,51 @@ func BlockHeight(chainID string) (blkHeight *BlockHeightResult, err error) {
 }
 
 //Block block information query
-func Block(height int64, chainID string) (blk *BlockResult, err error) {
-
-	defer FuncRecover(&err)
+func Block(height *int64, bTime string, num *int64, chainID string) (blk *BlockResult, err error) {
 
 	_, _, chainID = prepare("", "", chainID)
+
+	if height == nil && bTime == "" {
+		blkResult, err := BlockHeight(chainID)
+		if err != nil {
+			return nil, err
+		}
+		height = &blkResult.LastBlock
+	}
+
+	if height != nil {
+		return block(*height, chainID)
+	} else {
+		return blockEx(bTime, num, chainID)
+	}
+}
+
+func BlockForRpc(height int64, bTime string, num int64, chainID string) (blk *BlockResult, err error) {
+
+	return Block(&height, bTime, &num, chainID)
+}
+
+//block block information query
+func block(height int64, chainID string) (blk *BlockResult, err error) {
+
+	defer FuncRecover(&err)
 
 	addrS := nodeAddrSlice(chainID)
 
 	result := new(core_types.ResultBlock)
 	params := map[string]interface{}{"height": height}
-	err = DoHttpRequestAndParse(addrS, "block", params, result)
+	err = common.DoHttpRequestAndParse(addrS, "block", params, result)
 	if err != nil {
 		return
 	}
 
 	blk = new(BlockResult)
 	blk.BlockHeight = result.BlockMeta.Header.Height
-	blk.BlockHash = hex.EncodeToString(result.BlockMeta.BlockID.Hash)
-	blk.ParentHash = hex.EncodeToString(result.BlockMeta.Header.LastBlockID.Hash)
+	blk.BlockHash = "0x" + hex.EncodeToString(result.BlockMeta.BlockID.Hash)
+	blk.ParentHash = "0x" + hex.EncodeToString(result.BlockMeta.Header.LastBlockID.Hash)
 	blk.ChainID = result.BlockMeta.Header.ChainID
-	blk.ValidatorHash = hex.EncodeToString(result.BlockMeta.Header.ValidatorsHash)
-	blk.ConsensusHash = hex.EncodeToString(result.BlockMeta.Header.ConsensusHash)
+	blk.ValidatorHash = "0x" + hex.EncodeToString(result.BlockMeta.Header.ValidatorsHash)
+	blk.ConsensusHash = "0x" + hex.EncodeToString(result.BlockMeta.Header.ConsensusHash)
 	blk.BlockTime = result.BlockMeta.Header.Time.String()
 	blk.BlockSize = result.BlockSize
 	blk.ProposerAddress = result.BlockMeta.Header.ProposerAddress
@@ -73,7 +103,7 @@ func Block(height int64, chainID string) (blk *BlockResult, err error) {
 	blk.Txs = make([]TxResult, 0)
 	var blkResults *core_types.ResultBlockResults
 	if blkResults, err = blockResults(chainID, height); err != nil {
-		return
+		return blk, nil
 	}
 
 	for _, blkResult := range blkResults.Results.DeliverTx {
@@ -87,12 +117,67 @@ func Block(height int64, chainID string) (blk *BlockResult, err error) {
 	return
 }
 
+//blockEx block information query
+func blockEx(bTime string, num *int64, chainID string) (blk *BlockResult, err error) {
+
+	addrS := nodeAddrSlice(chainID)
+	cache.SetAddrList(addrS)
+
+	t, err := time.ParseInLocation("2006-01-02 15:04:05", bTime, time.UTC)
+	if err != nil {
+		return
+	}
+
+	nearlyHeight := cache.BinarySearchEx(0, 0, 128, t)
+	if nearlyHeight <= 0 {
+		return nil, errors.New("cannot find nearly block about time=" + bTime)
+	}
+	// if it less than require time then nearlyHeight plus one
+	if cache.CompareWithTime(nearlyHeight, t, false) == -1 {
+		nearlyHeight += 1
+	}
+
+	if num != nil && *num > 1 {
+		return blockSimpleResult(nearlyHeight, *num, addrS)
+	} else {
+		return block(nearlyHeight, chainID)
+	}
+}
+
+// blockSimpleResult get simple block result from h to h+num
+func blockSimpleResult(h, num int64, addrS []string) (blk *BlockResult, err error) {
+	blk = new(BlockResult)
+	blk.Result = make([]simpleBlockResult, 0)
+
+	result := new(core_types.ResultBlock)
+	index := int64(0)
+	for index < num {
+		err = common.DoHttpRequestAndParse(addrS, "block", map[string]interface{}{"height": h + index}, result)
+		if err != nil {
+			return
+		}
+
+		blk.Result = append(blk.Result, simpleBlockResult{
+			BlockHeight: h + index,
+			BlockHash:   "0x" + result.BlockMeta.BlockID.Hash.String(),
+			BlockTime:   result.BlockMeta.Header.Time.String()})
+
+		index++
+	}
+
+	return
+}
+
 //Transaction transaction information query
 func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (tx *TxResult, err error) {
 
 	defer FuncRecover(&err)
 
 	requireNotEmpty("txHash", txHash)
+
+	if txHash[:2] == "0x" {
+		txHash = txHash[2:]
+	}
 
 	if chainID == "" {
 		chainID = common.GetBCCConfig().DefaultChainID
@@ -104,7 +189,7 @@ func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (t
 
 	result := new(core_types.ResultTx)
 	params := map[string]interface{}{"hash": txHash}
-	err = DoHttpRequestAndParse(addrS, "tx", params, result)
+	err = common.DoHttpRequestAndParse(addrS, "tx", params, result)
 	if err != nil {
 		return
 	}
@@ -112,24 +197,39 @@ func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (t
 	if resultBlock == nil {
 		resultBlock = new(core_types.ResultBlock)
 		params = map[string]interface{}{"height": result.Height}
-		err = DoHttpRequestAndParse(addrS, "block", params, resultBlock)
+		err = common.DoHttpRequestAndParse(addrS, "block", params, resultBlock)
 		if err != nil {
 			return
 		}
 	}
 
-	txStr := string(resultBlock.Block.Txs[result.Index])
-	nonce, gasLimit, fromAddr, note, messages, err := parseTx(chainID, txStr)
+	var txStr string
+	var blkResults *core_types.ResultBlockResults
+	if blkResults, err = blockResults(chainID, result.Height); err != nil {
+		return
+	}
+
+	for k, v := range blkResults.Results.DeliverTx {
+		hash := hex.EncodeToString(v.TxHash)
+		if hash[:2] == "0x" {
+			txHash = txHash[2:]
+		}
+		if txHash == hash {
+			txStr = string(resultBlock.Block.Txs[k])
+		}
+	}
+
+	nonce, gasLimit, fromAddr, note, messages, err := parseTx(chainID, txStr, resultBlock.Block.Height, resultBlock.Block.ChainVersion)
 	if err != nil {
 		return
 	}
 
 	tx = new(TxResult)
-	tx.TxHash = txHash
+	tx.TxHash = "0x" + txHash
 	tx.TxTime = resultBlock.BlockMeta.Header.Time.String()
 	tx.Code = result.DeliverResult.Code
 	tx.Log = result.DeliverResult.Log
-	tx.BlockHash = hex.EncodeToString(resultBlock.BlockMeta.BlockID.Hash)
+	tx.BlockHash = "0x" + hex.EncodeToString(resultBlock.BlockMeta.BlockID.Hash)
 	tx.BlockHeight = resultBlock.BlockMeta.Header.Height
 	tx.From = fromAddr
 	tx.Nonce = nonce
@@ -139,15 +239,12 @@ func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (t
 	tx.Messages = messages
 	tx.Tags = make(map[string]*Tag)
 
-	for i := 0; i < len(result.DeliverResult.Tags); i++ {
-
+	for _, item := range result.DeliverResult.Tags {
 		Tag := new(Tag)
 		Tag.Receipt = make(map[string]interface{})
 		Receipt := make(map[string]interface{})
 
-		//aKey, err := base64.StdEncoding.DecodeString(string(result.DeliverResult.Tags[i].Key))
-
-		err = json.Unmarshal(result.DeliverResult.Tags[i].Value, &Tag)
+		err = json.Unmarshal(item.Value, &Tag)
 		if err != nil {
 			return nil, err
 		}
@@ -158,19 +255,16 @@ func Transaction(chainID, txHash string, resultBlock *core_types.ResultBlock) (t
 			return nil, err
 		}
 
-		Tag.Receipt["token"] = Receipt["token"]
-		Tag.Receipt["from"] = Receipt["from"]
-		Tag.Receipt["to"] = Receipt["to"]
-		Tag.Receipt["value"] = Receipt["value"]
+		Tag.Receipt = Receipt
+		Tag.ReceiptHash = "0x" + Tag.ReceiptHash
 
-		key := "/" + strconv.Itoa(i) + "/" + Tag.Name
-		tx.Tags[key] = Tag
-
+		tx.Tags[string(item.Key)] = Tag
 	}
+
 	return
 }
 
-func parseTx(chainID, txStr string) (nonce, gasLimit uint64, fromAddr, note string, messages []Message, err error) {
+func parseTx(chainID, txStr string, height int64, chainVersion *int64) (nonce, gasLimit uint64, fromAddr, note string, messages []Message, err error) {
 
 	messages = make([]Message, 0)
 
@@ -186,7 +280,7 @@ func parseTx(chainID, txStr string) (nonce, gasLimit uint64, fromAddr, note stri
 		gasLimit = txv1.GasLimit
 
 		var msg Message
-		msg, err = messageV1(chainID, txv1)
+		msg, err = messageV1(chainID, txv1, height, chainVersion)
 		if err != nil {
 			return
 		}
@@ -198,14 +292,14 @@ func parseTx(chainID, txStr string) (nonce, gasLimit uint64, fromAddr, note stri
 		if err != nil {
 			return
 		}
-		fromAddr = pubKey.Address()
+		fromAddr = pubKey.Address(chainID)
 		nonce = txv2.Nonce
 		note = txv2.Note
 		gasLimit = uint64(txv2.GasLimit)
 
 		var msg Message
 		for i := 0; i < len(txv2.Messages); i++ {
-			msg, err = message(chainID, txv2.Messages[i])
+			msg, err = message(chainID, txv2.Messages[i], height, chainVersion)
 			if err != nil {
 				return
 			}
@@ -263,14 +357,14 @@ func balanceOfToken(accAddress types.Address, tokenName, chainID string) (result
 	var tokenAddress types.Address
 	if tokenName == "" {
 		tokenResult := new(std.Token)
-		err = DoHttpQueryAndParse(addrS, std.KeyOfGenesisToken(), tokenResult)
+		err = common.DoHttpQueryAndParse(addrS, std.KeyOfGenesisToken(), tokenResult)
 		if err != nil {
 			return nil, errors.New("get genesis token error: " + err.Error())
 		}
 		tokenAddress = tokenResult.Address
 		tokenName = tokenResult.Name
 	} else {
-		if value, err = DoHttpQuery(addrS, std.KeyOfTokenWithName(tokenName)); err != nil {
+		if value, err = common.DoHttpQuery(addrS, std.KeyOfTokenWithName(tokenName)); err != nil {
 			return
 		}
 		if len(value) == 0 {
@@ -282,7 +376,7 @@ func balanceOfToken(accAddress types.Address, tokenName, chainID string) (result
 		}
 	}
 
-	if value, err = DoHttpQuery(addrS, std.KeyOfAccountToken(accAddress, tokenAddress)); err != nil {
+	if value, err = common.DoHttpQuery(addrS, std.KeyOfAccountToken(accAddress, tokenAddress)); err != nil {
 		return
 	}
 
@@ -298,7 +392,7 @@ func balanceOfToken(accAddress types.Address, tokenName, chainID string) (result
 	}
 
 	tokenInfo := new(std.Token)
-	err = DoHttpQueryAndParse(addrS, std.KeyOfGenesisToken(), tokenInfo)
+	err = common.DoHttpQueryAndParse(addrS, std.KeyOfGenesisToken(), tokenInfo)
 	if err != nil {
 		return
 	}
@@ -314,7 +408,7 @@ func allBalance(chainID string, address types.Address) (items *[]BalanceItemResu
 	addrS := nodeAddrSlice(chainID)
 
 	tokens := make([]string, 0)
-	if err = DoHttpQueryAndParse(addrS, std.KeyOfAccount(address), &tokens); err != nil {
+	if err = common.DoHttpQueryAndParse(addrS, std.KeyOfAccount(address), &tokens); err != nil {
 		return
 	}
 
@@ -325,7 +419,7 @@ func allBalance(chainID string, address types.Address) (items *[]BalanceItemResu
 			continue
 		}
 		tokenBalance := new(TokenBalance)
-		if err = DoHttpQueryAndParse(addrS, token, tokenBalance); err != nil {
+		if err = common.DoHttpQueryAndParse(addrS, token, tokenBalance); err != nil {
 			return
 		}
 
@@ -368,7 +462,7 @@ func Nonce(address types.Address, name, password, chainID, keyStorePath string) 
 	}
 
 	a := new(account)
-	value, err := DoHttpQuery(addrS, std.KeyOfAccountNonce(address))
+	value, err := common.DoHttpQuery(addrS, std.KeyOfAccountNonce(address))
 	if err != nil {
 		return
 	}
@@ -397,14 +491,14 @@ func ContractInfo(chainID, orgID, contractName string) (contracts map[string]std
 
 	addrS := nodeAddrSlice(chainID)
 
-	err = DoHttpQueryAndParse(addrS, std.KeyOfContractsWithName(orgID, contractName), &ContractList)
+	err = common.DoHttpQueryAndParse(addrS, std.KeyOfContractsWithName(orgID, contractName), &ContractList)
 
 	contracts = make(map[string]std.Contract)
 	for k, v := range ContractList.ContractAddrList {
 
 		contract := new(std.Contract)
 
-		err = DoHttpQueryAndParse(addrS, std.KeyOfContract(v), &contract)
+		err = common.DoHttpQueryAndParse(addrS, std.KeyOfContract(v), &contract)
 
 		contracts[contractName+string(k)] = *contract
 	}
@@ -416,7 +510,7 @@ func ContractInfoWithAddr(chainID, contractAddr string) (contract *std.Contract,
 
 	addrS := nodeAddrSlice(chainID)
 
-	err = DoHttpQueryAndParse(addrS, std.KeyOfContract(contractAddr), &contract)
+	err = common.DoHttpQueryAndParse(addrS, std.KeyOfContract(contractAddr), &contract)
 
 	return
 }
@@ -428,7 +522,7 @@ func AllContractInfo(chainID string) (ContractAddrList []string, err error) {
 
 	addrS := nodeAddrSlice(chainID)
 
-	err = DoHttpQueryAndParse(addrS, std.KeyOfAllContracts(), &ContractAddrList)
+	err = common.DoHttpQueryAndParse(addrS, std.KeyOfAllContracts(), &ContractAddrList)
 
 	return
 }
@@ -440,7 +534,7 @@ func QueryOrgInfo(orgID, chainID string) (OrgInfo *std.Organization, err error) 
 
 	OrgInfo = new(std.Organization)
 
-	err = DoHttpQueryAndParse(addrS, std.GetOrganizaitionInfo(orgID), &OrgInfo)
+	err = common.DoHttpQueryAndParse(addrS, std.GetOrganizaitionInfo(orgID), &OrgInfo)
 
 	return
 }
@@ -454,25 +548,25 @@ func CommitTx(chainID, tx string) (commit *CommitTxResult, err error) {
 
 	addrS := nodeAddrSlice(chainID)
 
-	var result *core_types.ResultBroadcastTxCommit
-	result, err = DoHttpCommitTxAndParse(addrS, tx)
+	var result *core_types.ResultTx
+	result, err = common.DoHttpCommitTxAndParseAsync(addrS, tx)
 	if err != nil {
 		return
 	}
 
 	commit = new(CommitTxResult)
-	if result.CheckTx.Code != types.CodeOK {
-		commit.Code = result.CheckTx.Code
-		commit.Log = result.CheckTx.Log
+	if result.CheckResult.Code != types.CodeOK {
+		commit.Code = result.CheckResult.Code
+		commit.Log = result.CheckResult.Log
 	} else {
-		commit.Code = result.DeliverTx.Code
-		commit.Log = result.DeliverTx.Log
+		commit.Code = result.DeliverResult.Code
+		commit.Log = result.DeliverResult.Log
 	}
 
-	commit.Fee = result.DeliverTx.Fee
-	commit.TxHash = hex.EncodeToString(result.Hash)
+	commit.Fee = result.DeliverResult.Fee
+	commit.TxHash = "0x" + result.Hash
 	commit.Height = result.Height
-	commit.Data = result.DeliverTx.Data
+	commit.Data = result.DeliverResult.Data
 
 	return
 }
@@ -502,7 +596,7 @@ func blockResults(chainID string, height int64) (blkResults *core_types.ResultBl
 
 	blkResults = new(core_types.ResultBlockResults)
 	params := map[string]interface{}{"height": height}
-	err = DoHttpRequestAndParse(addrS, "block_results", params, blkResults)
+	err = common.DoHttpRequestAndParse(addrS, "block_results", params, blkResults)
 	if err != nil {
 		return
 	}
@@ -510,16 +604,16 @@ func blockResults(chainID string, height int64) (blkResults *core_types.ResultBl
 	return
 }
 
-func message(chainID string, message types.Message) (msg Message, err error) {
+func message(chainID string, message types.Message, height int64, chainVersion *int64) (msg Message, err error) {
 
 	methodID := fmt.Sprintf("%x", message.MethodID)
 
 	msg.SmcAddress = message.Contract
-	if msg.SmcName, msg.Method, err = contractNameAndMethod(message.Contract, chainID, methodID); err != nil {
+	if msg.SmcName, msg.Method, err = contractNameAndMethod(message.Contract, chainID, methodID, height, chainVersion); err != nil {
 		return
 	}
 
-	if methodID == transferMethodID {
+	if methodID == transferMethodIDV2 {
 		if len(message.Items) != 2 {
 			return msg, errors.New("items count error")
 		}
@@ -540,7 +634,7 @@ func message(chainID string, message types.Message) (msg Message, err error) {
 	return
 }
 
-func messageV1(chainID string, tx tx1.Transaction) (msg Message, err error) {
+func messageV1(chainID string, tx tx1.Transaction, height int64, chainVersion *int64) (msg Message, err error) {
 
 	var methodInfo tx1.MethodInfo
 	if err = rlp.DecodeBytes(tx.Data, &methodInfo); err != nil {
@@ -549,11 +643,11 @@ func messageV1(chainID string, tx tx1.Transaction) (msg Message, err error) {
 	methodID := fmt.Sprintf("%x", methodInfo.MethodID)
 
 	msg.SmcAddress = tx.To
-	if msg.SmcName, msg.Method, err = contractNameAndMethod(tx.To, chainID, methodID); err != nil {
+	if msg.SmcName, msg.Method, err = contractNameAndMethod(tx.To, chainID, methodID, height, chainVersion); err != nil {
 		return
 	}
 
-	if methodID == transferMethodID {
+	if methodID == transferMethodIDV1 {
 		var itemsBytes = make([][]byte, 0)
 		if err = rlp.DecodeBytes(methodInfo.ParamData, &itemsBytes); err != nil {
 			return
@@ -565,13 +659,34 @@ func messageV1(chainID string, tx tx1.Transaction) (msg Message, err error) {
 	return
 }
 
-func contractNameAndMethod(contractAddress types.Address, chainID, methodID string) (contractName string, method string, err error) {
+func contractNameAndMethod(contractAddress types.Address, chainID, methodID string, height int64, chainVersion *int64) (contractName string, method string, err error) {
 
 	addrS := nodeAddrSlice(chainID)
 
 	contract := new(std.Contract)
-	if err = DoHttpQueryAndParse(addrS, std.KeyOfContract(contractAddress), contract); err != nil {
+	if err = common.DoHttpQueryAndParse(addrS, std.KeyOfContract(contractAddress), contract); err != nil {
 		return
+	}
+
+	if chainVersion != nil && contract.LoseHeight != 0 && contract.LoseHeight < height {
+		conVer := new(std.ContractVersionList)
+		if err = common.DoHttpQueryAndParse(addrS, std.KeyOfContractsWithName(contract.OrgID, contract.Name), conVer); err == nil {
+			for index, eh := range conVer.EffectHeights {
+				if eh <= height {
+					tmp := new(std.Contract)
+					if err = common.DoHttpQueryAndParse(addrS, std.KeyOfContract(conVer.ContractAddrList[index]), tmp); err == nil {
+						if tmp.LoseHeight == 0 || (tmp.LoseHeight != 0 && tmp.LoseHeight > height) {
+							contract = tmp
+							break
+						}
+					} else {
+						return
+					}
+				}
+			}
+		} else {
+			return
+		}
 	}
 
 	for _, methodItem := range contract.Methods {
@@ -590,7 +705,7 @@ func tokenName(chainID string, tokenAddress types.Address) (name string, err err
 
 	token := new(std.Token)
 
-	if err = DoHttpQueryAndParse(addrS, std.KeyOfToken(tokenAddress), token); err != nil {
+	if err = common.DoHttpQueryAndParse(addrS, std.KeyOfToken(tokenAddress), token); err != nil {
 		return
 	}
 
@@ -604,7 +719,7 @@ func contractOfName(chainID, orgID, contractName string) (contract *std.Contract
 	key := std.KeyOfContractsWithName(orgID, contractName)
 
 	contractList := new(std.ContractVersionList)
-	err = DoHttpQueryAndParse(addrS, key, contractList)
+	err = common.DoHttpQueryAndParse(addrS, key, contractList)
 	if err != nil {
 		return nil, errors.New("Is orgName or contract's name right? error: " + err.Error())
 	}
@@ -621,7 +736,7 @@ func contractOfName(chainID, orgID, contractName string) (contract *std.Contract
 		for index, item := range contractList.EffectHeights {
 			effectIndex = index
 			if item < blkHeightResult.LastBlock {
-				if index < heightLen-1 && contractList.EffectHeights[index] > item {
+				if index < heightLen-1 && contractList.EffectHeights[index+1] > blkHeightResult.LastBlock {
 					break
 				}
 			}
@@ -633,30 +748,141 @@ func contractOfName(chainID, orgID, contractName string) (contract *std.Contract
 	key = std.KeyOfContract(effectiveAddr())
 	contract = new(std.Contract)
 
-	err = DoHttpQueryAndParse(addrS, key, contract)
+	err = common.DoHttpQueryAndParse(addrS, key, contract)
 
 	return
 }
 
-func contractOfTokenName(chainID, tokenName string) (contract *std.Contract, err error) {
+func tokenAddressFromName(chainID, tokenName string) (tokenAddr types.Address, err error) {
 
 	addrS := nodeAddrSlice(chainID)
 
 	key := std.KeyOfTokenWithName(tokenName)
-	tokenAddr := new(string)
 
-	err = DoHttpQueryAndParse(addrS, key, tokenAddr)
+	err = common.DoHttpQueryAndParse(addrS, key, &tokenAddr)
 	if err != nil {
 		return
 	}
 
-	key = std.KeyOfContract(*tokenAddr)
-	contract = new(std.Contract)
+	return
+}
 
-	err = DoHttpQueryAndParse(addrS, key, contract)
+func QueryOfRpc(key, chainID string) (result *core_types.ResultABCIQuery, err error) {
+	addrS := nodeAddrSlice(chainID)
+
+	result = new(core_types.ResultABCIQuery)
+	result, err = common.DoHttpQueryForRpc(addrS, key)
 	if err != nil {
-		return
+		return nil, errors.New("rpc query failed , error: " + err.Error())
 	}
 
-	return contractOfName(chainID, contract.OrgID, contract.Name)
+	return result, nil
+}
+
+// Query the contract information based on the parameters for Rpc
+func ContractInfoForRPC(orgName, contractName, orgID, contractAddr, chainID string) (contract *std.Contract, err error) {
+
+	if orgID != "" && contractName != "" && contractAddr == "" {
+		contractList, err := ContractInfo(chainID, orgID, contractName)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, v := range contractList {
+
+			// 校验其他输入参数
+			if orgName != "" {
+				OrgInfo, err := QueryOrgInfo(orgID, chainID)
+				if err != nil {
+					return nil, err
+				}
+
+				if orgName != OrgInfo.Name {
+					fmt.Println("Error: Input orgName is wrong.")
+					return nil, err
+				}
+			}
+
+			return &v, nil
+		}
+
+	} else if orgName != "" && contractName != "" && contractAddr == "" {
+		contract, err := QueryContractInfoForRpc(orgName, contractName, chainID)
+		if err != nil {
+			return nil, err
+		}
+
+		// 校验其他输入参数
+		if orgID != "" && orgID != contract.OrgID {
+			fmt.Println("Error: Input orgID is wrong.")
+			return nil, err
+		}
+
+		return contract, nil
+
+	} else if contractAddr != "" {
+		contract, err := ContractInfoWithAddr(chainID, contractAddr)
+		if err != nil {
+			return nil, err
+		}
+
+		// 校验其他输入参数
+		if orgName != "" && orgID != "" {
+			OrgInfo, err := QueryOrgInfo(orgID, chainID)
+			if err != nil {
+				return nil, err
+			}
+
+			if orgName != OrgInfo.Name {
+				fmt.Println("Error: Input orgName is wrong.")
+				return nil, nil
+			}
+		}
+		if orgID != "" && orgID != contract.OrgID {
+			fmt.Println("Error: orgID orgName is wrong.")
+			return nil, nil
+		}
+
+		return contract, nil
+
+	} else if orgName == "" && contractName == "" && orgID == "" && contractAddr == "" {
+		ContractAddrList, err := AllContractInfo(chainID)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("OK")
+		fmt.Println("Response:")
+		for _, v := range ContractAddrList {
+			jsIndent, _ := json.MarshalIndent(&v, "", "  ")
+			fmt.Printf("  %s\n", string(jsIndent))
+		}
+	} else {
+		fmt.Println("Insufficient input parameters")
+		return nil, nil
+	}
+
+	return
+}
+
+type BlockChainHelper struct {
+	smc sdk.ISmartContract
+}
+
+func QueryContractInfoForRpc(orgName, contractName, chainID string) (contract *std.Contract, err error) {
+	bh := helper.BlockChainHelper{}
+	orgID := bh.CalcOrgID(orgName)
+
+	addrS := nodeAddrSlice(chainID)
+
+	List := new(std.ContractVersionList)
+	err = common.DoHttpQueryAndParse(addrS, std.KeyOfContractsWithName(orgID, contractName), &List)
+
+	for _, v := range List.ContractAddrList {
+		contract, err = ContractInfoWithAddr(chainID, v)
+		if err != nil {
+			return nil, err
+		}
+		return contract, nil
+	}
+	return
 }

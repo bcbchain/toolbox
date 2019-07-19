@@ -280,6 +280,7 @@ func runSimpleServer(nodeTable map[string]NodeDef, genesisDoc types.GenesisDoc, 
 						}
 					}
 				} else {
+					fmt.Printf("unknown client: %v\n", remoteIP)
 					_, _ = fmt.Fprintf(w, "continue")
 				}
 			}

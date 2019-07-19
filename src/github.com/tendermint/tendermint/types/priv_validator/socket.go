@@ -120,7 +120,7 @@ func (sc *SocketPV) getAddress() (crypto.Address, error) {
 		return "", err
 	}
 
-	return p.Address(), nil
+	return p.Address(crypto.GetChainId()), nil
 }
 
 // GetPubKey implements PrivValidator.

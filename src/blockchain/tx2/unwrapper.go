@@ -1,6 +1,7 @@
 package tx2
 
 import (
+	"blockchain/common/statedbhelper"
 	"blockchain/smcsdk/sdk/rlp"
 	"blockchain/types"
 	"bytes"
@@ -18,6 +19,11 @@ func TxParse(txString string) (tx types.Transaction, pubKey crypto.PubKeyEd25519
 	Version := "v2"
 	SignerNumber := "<1>"
 	strs := strings.Split(txString, ".")
+
+	if len(strs) != 5 {
+		err = errors.New("tx data error")
+		return
+	}
 
 	if strs[0] != MAC || strs[1] != Version || strs[3] != SignerNumber {
 		err = errors.New("tx data error")
@@ -78,7 +84,7 @@ func QueryDataParse(chainID, txString string) (crypto.Address, types.Query, erro
 		return "", types.Query{}, errors.New("verify sig fail")
 	}
 	crypto.SetChainId(chainID)
-	siginfo.PubKey.Address()
+	siginfo.PubKey.Address(statedbhelper.GetChainID())
 
 	//RLP解码Transaction结构
 	reader = bytes.NewReader(txData)
@@ -88,5 +94,5 @@ func QueryDataParse(chainID, txString string) (crypto.Address, types.Query, erro
 		return "", types.Query{}, err
 	}
 
-	return siginfo.PubKey.Address(), *qy, nil
+	return siginfo.PubKey.Address(statedbhelper.GetChainID()), *qy, nil
 }

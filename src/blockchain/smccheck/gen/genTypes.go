@@ -9,23 +9,21 @@ import (
 )
 
 const typesTemplate = `package {{.PackageName}}
-{{- if (hasInterface .Functions)}}
+{{- if (hasInterface .IFunctions)}}
 {{if .Imports}}import ({{end}}
   {{range $v,$vv := .Imports}}
 {{$v.Name}} {{$v.Path}}{{end}}
 {{if .Imports}}){{end}}
 {{- end}}
 
-{{range $i,$f := .Functions}}
-{{- if $f.IGas}}
+{{range $i,$f := .IFunctions}}
 // {{$f.Name}}Param structure of parameters of {{$f.Name}}() of v2.0
 type {{$f.Name}}Param struct { {{range $ii,$p := $f.SingleParams}}
 	{{$p|expNames|upperFirst}} {{$p|expType}}{{end}}}
-{{- end}}
 {{end}}
 `
 
-func GenTypes(inPath string, res *parsecode.Result) error {
+func GenTypes(inPath string, res *parsecode.Result) {
 	filename := filepath.Join(inPath, res.PackageName+"_autogen_types.go")
 
 	funcMap := template.FuncMap{
@@ -33,31 +31,23 @@ func GenTypes(inPath string, res *parsecode.Result) error {
 		"expNames":   parsecode.ExpandNames,
 		"expType":    parsecode.ExpandType,
 		"hasInterface": func(functions []genrpc.FatFunction) bool {
-			for _, function := range functions {
-				if function.IGas != 0 {
-					return true
-				}
-			}
-
-			return false
+			return len(functions) != 0
 		},
 	}
 	tmpl, err := template.New("types").Funcs(funcMap).Parse(typesTemplate)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
-	types := genrpc.Res2rpc(res)
+	types := genrpc.Res2rpc(res, 2)
 
 	var buf bytes.Buffer
 
 	if err = tmpl.Execute(&buf, types); err != nil {
-		return err
+		panic(err)
 	}
 
 	if err := parsecode.FmtAndWrite(filename, buf.String()); err != nil {
-		return err
+		panic(err)
 	}
-	return nil
-
 }

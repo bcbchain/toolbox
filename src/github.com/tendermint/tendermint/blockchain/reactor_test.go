@@ -20,8 +20,8 @@ func makeStateAndBlockStore(logger log.Logger) (sm.State, *BlockStore) {
 	// stateDB := dbm.NewDebugDB("stateDB", dbm.NewMemDB())
 	blockDB := dbm.NewMemDB()
 	stateDB := dbm.NewMemDB()
-	blockStore := NewBlockStore(blockDB)
-	state, err := sm.LoadStateFromDBOrGenesisFile(stateDB, config.GenesisFile())
+	blockStore := NewBlockStore(stateDB, blockDB)
+	state, err := sm.LoadStateFromDBOrGenesisFile(stateDB, config)
 	if err != nil {
 		panic(cmn.ErrorWrap(err, "error constructing state from genesis file"))
 	}
@@ -34,7 +34,7 @@ func newBlockchainReactor(logger log.Logger, maxBlockHeight int64) *BlockchainRe
 	// Make the blockchainReactor itself
 	fastSync := true
 	var nilApp proxy.AppConnConsensus
-	blockExec := sm.NewBlockExecutor(dbm.NewMemDB(), log.TestingLogger(), nilApp,
+	blockExec := sm.NewBlockExecutor(dbm.NewMemDB(), dbm.NewMemDB(), log.TestingLogger(), nilApp,
 		types.MockMempool{}, types.MockEvidencePool{})
 
 	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
@@ -58,8 +58,14 @@ func TestNoBlockResponse(t *testing.T) {
 	maxBlockHeight := int64(20)
 
 	bcr := newBlockchainReactor(log.TestingLogger(), maxBlockHeight)
-	bcr.Start()
-	defer bcr.Stop()
+	if e := bcr.Start(); e != nil {
+		bcr.Logger.Warn(e.Error())
+	}
+	defer func() {
+		if e := bcr.Stop(); e != nil {
+			bcr.Logger.Warn(e.Error())
+		}
+	}()
 
 	// Add some peers in
 	peer := newbcrTestPeer(p2p.ID(cmn.RandStr(12)))
@@ -155,7 +161,7 @@ func makeTxs(height int64) (txs []types.Tx) {
 }
 
 func makeBlock(height int64, state sm.State) *types.Block {
-	block, _ := state.MakeBlock(height, makeTxs(height), new(types.Commit))
+	block, _ := state.MakeBlock(height, makeTxs(height), new(types.Commit), "", "", nil)
 	return block
 }
 

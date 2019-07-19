@@ -44,7 +44,11 @@ func TestBasic(t *testing.T) {
 		t.Error(err)
 	}
 
-	defer pool.Stop()
+	defer func() {
+		if e := pool.Stop(); e != nil {
+			pool.Logger.Warn(e.Error())
+		}
+	}()
 
 	// Introduce each peer.
 	go func() {
@@ -99,7 +103,11 @@ func TestTimeout(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	defer pool.Stop()
+	defer func() {
+		if e := pool.Stop(); e != nil {
+			pool.Logger.Warn(e.Error())
+		}
+	}()
 
 	for _, peer := range peers {
 		t.Logf("Peer %v", peer.id)

@@ -16,7 +16,7 @@ func (err *Error) Error() string {
 	if found {
 		return errStr
 	}
-	return ""
+	return "Undefined error description"
 }
 
 // For smart contracts custom errors
@@ -27,6 +27,7 @@ const (
 	// minimum of stub code
 	ErrStubDefined = 51000 + iota
 	ErrGasNotEnough
+	ErrFeeNotEnough
 )
 const (
 	//standard code for sdk
@@ -55,8 +56,9 @@ func init() {
 	errStrings[CodeOK] = ""
 
 	//for stub
-	errStrings[ErrStubDefined] = ""
-	errStrings[ErrGasNotEnough] = "Gas Limit is not enough"
+	errStrings[ErrStubDefined] = "Error stub defined"
+	errStrings[ErrGasNotEnough] = "Gas limit is not enough"
+	errStrings[ErrFeeNotEnough] = "Insufficient balance to pay fee"
 
 	//for sdk
 	errStrings[ErrAddSupplyNotEnabled] = "Add supply is not enabled"

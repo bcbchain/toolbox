@@ -60,12 +60,25 @@ func (pbs *MycoinStub) UpdateChain(smc sdk.ISmartContract) (response bcType.Resp
 	return response
 }
 
+// UpdateChain update smart contract
+func (pbs *MycoinStub) Mine(smc sdk.ISmartContract) (response bcType.Response) {
+	defer FuncRecover(&response)
+
+	response.Code = types.CodeOK
+	return response
+}
+
 //Invoke invoke function
 func (pbs *MycoinStub) Invoke(smc sdk.ISmartContract) (response bcType.Response) {
+	return pbs.InvokeInternal(smc, true)
+}
+
+//Invoke invoke function
+func (pbs *MycoinStub) InvokeInternal(smc sdk.ISmartContract, feeFlag bool) (response bcType.Response) {
 	defer FuncRecover(&response)
 
 	// 生成手续费收据
-	fee, gasUsed, feeReceipt, err := common.FeeAndReceipt(smc, true)
+	fee, gasUsed, feeReceipt, err := common.FeeAndReceipt(smc, feeFlag)
 	response.Fee = fee
 	response.GasUsed = gasUsed
 	response.Tags = append(response.Tags, tmcommon.KVPair{Key: feeReceipt.Key, Value: feeReceipt.Value})

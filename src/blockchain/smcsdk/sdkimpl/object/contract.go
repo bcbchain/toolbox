@@ -27,10 +27,14 @@ func (c *Contract) SetSMC(smc sdk.ISmartContract) { c.smc = smc }
 func (c *Contract) Address() types.Address { return c.ct.Address }
 
 // Account get contract's account
-func (c *Contract) Account() types.Address { return c.ct.Account }
+func (c *Contract) Account() sdk.IAccount {
+	return c.smc.Helper().AccountHelper().AccountOf(c.ct.Account)
+}
 
 // Owner get contract's owner
-func (c *Contract) Owner() types.Address { return c.ct.Owner }
+func (c *Contract) Owner() sdk.IAccount {
+	return c.smc.Helper().AccountHelper().AccountOf(c.ct.Owner)
+}
 
 // Name get contract's name
 func (c *Contract) Name() string { return c.ct.Name }
@@ -56,6 +60,9 @@ func (c *Contract) Methods() []std.Method { return c.ct.Methods }
 // Interfaces get contract's interfaces
 func (c *Contract) Interfaces() []std.Method { return c.ct.Interfaces }
 
+// Mine get contract's mine method
+func (c *Contract) Mine() []std.Method { return c.ct.Mine }
+
 // Token get contract's token
 func (c *Contract) Token() types.Address { return c.ct.Token }
 
@@ -70,19 +77,19 @@ func (c *Contract) StdContract() *std.Contract { return &c.ct }
 
 // SetOwner set contract's owner
 func (c *Contract) SetOwner(newOwner types.Address) {
-	sdk.RequireAddress(c.smc, newOwner)
+	sdk.RequireAddress(newOwner)
 
 	// 判断sender是否有修改的权限
-	sdk.RequireOwner(c.smc)
+	sdk.RequireOwner()
 
 	sdk.Require(newOwner != c.Address(),
 		types.ErrInvalidParameter, "newOwner address cannot be contract address")
 
-	sdk.Require(newOwner != c.Account(),
+	sdk.Require(newOwner != c.ct.Account,
 		types.ErrInvalidParameter, "newOwner address cannot be contract account address")
 
 	// cannot set new owner is contract's owner
-	sdk.Require(c.Owner() != newOwner,
+	sdk.Require(c.ct.Owner != newOwner,
 		types.ErrInvalidParameter, "Cannot set owner to self")
 
 	// exchange token's owner from old to new
@@ -93,7 +100,7 @@ func (c *Contract) SetOwner(newOwner types.Address) {
 
 	// add contract to new owner and delete contract from old owner
 	c.addContractToNewOwner(newOwner)
-	c.delContractFromOldOwner(c.Owner())
+	c.delContractFromOldOwner(c.ct.Owner)
 
 	// dirty old contract
 	key := std.KeyOfContract(c.Address())
