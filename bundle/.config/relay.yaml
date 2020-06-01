@@ -1,0 +1,20 @@
+#主链ID
+mainChainID: "bcb"
+
+#主链的openUrl
+mainChainUrl:
+  - "https://earth.bcbchain.io"
+
+#sideChainIDs: 需要搬运的目标侧链的ID
+sideChainIDs:
+  - "bcb<test1>"
+  - "bcb<test2>"
+  - "bcb<test3>"
+
+#dbName: 状态数据库名称
+dbName : "relay"
+
+#logger_xxx 指定测试工具的log输出方式和级别
+loggerScreen : true
+loggerFile : true
+loggerLevel : "debug"

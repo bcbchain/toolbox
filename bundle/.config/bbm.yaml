@@ -1,0 +1,12 @@
+#GIChain服务地址和端口
+nodeAddr: "http://192.168.162.159:46657"
+#nodeAddr: "http://192.168.162.158:37827"
+#创世账户的秘钥，给测试账户转账用
+genesisKey: ""
+#logger_xxx 指定测试工具的log输出方式和级别
+loggerScreen : true
+loggerFile : true
+loggerLevel : "Info"
+loggerFilePath: "./log"
+#动态打印TPS的频率，以块为单位
+printTPSFrequency: 10
