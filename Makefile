@@ -24,3 +24,7 @@ bcc:
 install:
 	cp -rf ./bundle/.config ./build/
 .PHONY: install
+
+dist:
+	@sh -c "'$(CURDIR)/scripts/dist.sh'"
+.PHONY: dist
