@@ -538,6 +538,9 @@ func SolDeploy(name, password string, bvmParam BVMDeployParam) (result *CommitTx
 	// require not empty
 	requireNotEmpty("name", name)
 	requireNotEmpty("password", password)
+	if len(bvmParam.SourceFile) != 0 {
+		requireNotEmpty("When compile solidity contract, contract name", bvmParam.ContractName)
+	}
 
 	if bvmParam.TokenAddr == "" && bvmParam.TokenName == "" {
 		err = errors.New("tokenAddr and tokenName can not all be empty")
